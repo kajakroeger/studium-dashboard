@@ -8,8 +8,21 @@ Das Dasboard richtet sich an Studierende, die ein Fernstudium absolvieren und ih
 Das Studium Dasboard gibt daher eine Übersicht über den aktuellen Stand des Studienfortschritts und liefert eine Prognose über den Abschluss des Studiums.
 <br></br>
 
+## verwendete Technologien
+
+| Technologie           | Beschreibung                                |
+|-----------------------|---------------------------------------------|
+| SQLite                | relationale, dateibasierte Datenbank        |
+| venv                  | Virtuelle Umgebung zur Verwaltung projekt-spezifischer Pakete und Abhängigkeiten, unabhängig von der globalen Python-Installation  |
+| pandas                | zur Datenaufbereitung und -analyse          |
+| plotly                | interaktive Diagramme und Visualisierungen  |
+| streamlit             | User Interface                              |
+| Jupyter Notebook      | Machbarkeitsprüfung und Dokumentation       |
+
+<br></br>
+
 ## 🛠️ Voraussetzung
-- Python 3.9 oder höher
+- Python 3.13.5 oder höher
 <br></br>
 
 
@@ -49,5 +62,5 @@ python testdaten_erstellen.py
 
 5. Dashboard starten
 ```bash
-python app.py
+streamlit run app.py
 ```
