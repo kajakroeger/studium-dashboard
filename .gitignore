@@ -7,8 +7,5 @@ __pycache__/
 # Virtual Environment
 venv/
 
-# Jupyter
-.ipynb_checkpoints/
-
 # SQLite Datenbank 
 *.db
