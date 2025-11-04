@@ -4,8 +4,13 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Virtual Environment
+# Virtual Environments
 venv/
 
 # SQLite Datenbank 
 *.db
+*.db-shm
+*.db-wal
+
+# Testdateien
+scratch*.py
