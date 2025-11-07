@@ -30,12 +30,13 @@ class StatusEinschreibung(Enum):
 
 @dataclass
 class Einschreibung:
-    student: "Student"
-    studiengang: Optional["Studiengang"]
+    student_id: int
     start_datum: date
     ziel_enddatum: date
     ziel_notenschnitt: float
     status: StatusEinschreibung = StatusEinschreibung.AKTIV
+    studiengang_id: Optional[int] = None
+    id: Optional[int] = None  # Primärschlüssel, wird von der DB gesetzt
 
     enddatum_tatsaechlich: Optional[date] = None
     notenschnitt_tatsaechlich: Optional[float] = None
@@ -53,7 +54,7 @@ class Einschreibung:
 
     def dauer_bis_ziel(self) -> timedelta:
         return self.ziel_enddatum - self.start_datum
-
+    
     def dauer_tatsaechlich(self) -> Optional[timedelta]:
         if self.enddatum_tatsaechlich is None:
             return None

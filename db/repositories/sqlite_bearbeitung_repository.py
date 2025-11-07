@@ -1,58 +1,87 @@
 # db/repositories/sqlite_bearbeitung_repository.py
 """
-SQLite-Skelett für BearbeitungRepository.
-Beachtet Enum-Konvertierung für StatusBearbeitung.
-Implementiert CRUD-Methoden und Tabelleninitialisierung.
+SQLite-Repo für Bearbeitung (CRUD + Schema-Ensure/Migration).
+Achtet auf:
+- korrekte SQL-Strings (Leerzeichen!)
+- idempotente Migration (Spalten prüfen)
+- Enum-Mapping für StatusBearbeitung
+- ISO-String <-> date konvertieren
 """
 
 from __future__ import annotations
 from typing import Iterable, Optional
 from datetime import date
 
-from db import ConnectionProvider
+from db.connection_provider import ConnectionProvider
+from db.repositories.bearbeitung_repository import BearbeitungRepository
 from models.bearbeitung import Bearbeitung, StatusBearbeitung
-from .bearbeitung_repository import BearbeitungRepository
+
+
+def _parse_date(val: Optional[str]) -> Optional[date]:
+    return date.fromisoformat(val) if val else None
+
+def _to_str(d: Optional[date]) -> Optional[str]:
+    return d.isoformat() if d else None
 
 
 class SQLiteBearbeitungRepository(BearbeitungRepository):
-    """Konkreter SQLite-Adapter für BearbeitungRepository."""
-
     def __init__(self, provider: ConnectionProvider) -> None:
         self._provider = provider
-        self._ensure_table()
+        self._ensure_schema()
 
-    # legt Datenbanktabelle an, falls sie noch nicht existiert
-    def _ensure_table(self) -> None:
-        sql = """
-        CREATE TABLE IF NOT EXISTS bearbeitung (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            kurs_id INTEGER NOT NULL,
-            student_id INTEGER NOT NULL,
-            start_datum DATE NOT NULL,
-            status TEXT NOT NULL,
-            thema TEXT,
-            abgabe_datum DATE
-        );
-        """
+    def _ensure_schema(self) -> None:
+        """Tabelle anlegen + minimale Migrationen (idempotent)."""
         with self._provider.connect() as conn:
-            conn.execute(sql)
+            # Basistabelle
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS bearbeitung (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    student_id INTEGER NOT NULL,
+                    kurs_id INTEGER NOT NULL,
+                    status TEXT NOT NULL,
+                    plan_start TEXT,
+                    plan_end TEXT,
+                    start_datum TEXT,
+                    abgabe_datum TEXT
+                )
+            """)
+            # Migrationen: fehlende Spalten nachrüsten (falls die Tabelle älter ist)
+            cols = {r["name"] for r in conn.execute("PRAGMA table_info(bearbeitung)")}
+            add_cols = []
+            if "plan_start" not in cols:
+                add_cols.append("ALTER TABLE bearbeitung ADD COLUMN plan_start TEXT;")
+            if "plan_end" not in cols:
+                add_cols.append("ALTER TABLE bearbeitung ADD COLUMN plan_end TEXT;")
+            if "start_datum" not in cols:
+                add_cols.append("ALTER TABLE bearbeitung ADD COLUMN start_datum TEXT;")
+            if "abgabe_datum" not in cols:
+                add_cols.append("ALTER TABLE bearbeitung ADD COLUMN abgabe_datum TEXT;")
+            if "status" not in cols:
+                add_cols.append("ALTER TABLE bearbeitung ADD COLUMN status TEXT NOT NULL DEFAULT 'inaktiv';")
+
+            for stmt in add_cols:
+                conn.execute(stmt)
             conn.commit()
-    
-    # Public API
+
+            # WICHTIG: Falls die Tabelle historisch OHNE 'id' angelegt wurde, kann SQLite das nicht einfach ändern.
+            # In dem Fall bitte DB löschen (Dev) oder: Daten migrieren (CREATE TMP + COPY + DROP + RENAME).
+
+    # ------------------- CRUD -------------------
+
     def get_by_id(self, bearbeitung_id: int) -> Optional[Bearbeitung]:
         with self._provider.connect() as conn:
             row = conn.execute(
-                "SELECT id, kurs_id, student_id, start_datum, status, thema, abgabe_datum "
-                "FROM bearbeitung WHERE id=?",
+                "SELECT id, student_id, kurs_id, status, plan_start, plan_end, start_datum, abgabe_datum "
+                "FROM bearbeitung WHERE id = ?",
                 (bearbeitung_id,),
             ).fetchone()
-        return None if row is None else self._row_to_model(row)
+        return self._row_to_model(row) if row else None
 
     def all_for_student(self, student_id: int) -> Iterable[Bearbeitung]:
         with self._provider.connect() as conn:
             rows = conn.execute(
-                "SELECT id, kurs_id, student_id, start_datum, status, thema, abgabe_datum "
-                "FROM bearbeitung WHERE student_id=? ORDER BY start_datum DESC",
+                "SELECT id, student_id, kurs_id, status, plan_start, plan_end, start_datum, abgabe_datum "
+                "FROM bearbeitung WHERE student_id = ? ORDER BY start_datum DESC",
                 (student_id,),
             ).fetchall()
         return [self._row_to_model(r) for r in rows]
@@ -60,15 +89,17 @@ class SQLiteBearbeitungRepository(BearbeitungRepository):
     def create(self, b: Bearbeitung) -> int:
         with self._provider.connect() as conn:
             cur = conn.execute(
-                "INSERT INTO bearbeitung (kurs_id, student_id, start_datum, status, thema, abgabe_datum) "
-                "VALUES (?,?,?,?,?,?)",
+                "INSERT INTO bearbeitung "
+                "(student_id, kurs_id, status, plan_start, plan_end, start_datum, abgabe_datum) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
-                    b.kurs_id,
                     b.student_id,
-                    b.start_datum.isoformat(),
+                    b.kurs_id,
                     b.status.value,
-                    b.thema,
-                    b.abgabe_datum.isoformat() if b.abgabe_datum else None,
+                    _to_str(b.plan_start),
+                    _to_str(b.plan_end),
+                    _to_str(b.start_datum),
+                    _to_str(b.abgabe_datum),
                 ),
             )
             conn.commit()
@@ -77,17 +108,22 @@ class SQLiteBearbeitungRepository(BearbeitungRepository):
         return new_id
 
     def update(self, b: Bearbeitung) -> None:
+        if b.id is None:
+            raise ValueError("Bearbeitung.update: id fehlt.")
         with self._provider.connect() as conn:
             conn.execute(
-                "UPDATE bearbeitung SET kurs_id=?, student_id=?, start_datum=?, status=?, thema=?, abgabe_datum=? "
-                "WHERE id=?",
+                "UPDATE bearbeitung SET "
+                "student_id = ?, kurs_id = ?, status = ?, "
+                "plan_start = ?, plan_end = ?, start_datum = ?, abgabe_datum = ? "
+                "WHERE id = ?",
                 (
-                    b.kurs_id,
                     b.student_id,
-                    b.start_datum.isoformat(),
+                    b.kurs_id,
                     b.status.value,
-                    b.thema,
-                    b.abgabe_datum.isoformat() if b.abgabe_datum else None,
+                    _to_str(b.plan_start),
+                    _to_str(b.plan_end),
+                    _to_str(b.start_datum),
+                    _to_str(b.abgabe_datum),
                     b.id,
                 ),
             )
@@ -95,22 +131,20 @@ class SQLiteBearbeitungRepository(BearbeitungRepository):
 
     def delete(self, bearbeitung_id: int) -> None:
         with self._provider.connect() as conn:
-            conn.execute("DELETE FROM bearbeitung WHERE id=?", (bearbeitung_id,))
+            conn.execute("DELETE FROM bearbeitung WHERE id = ?", (bearbeitung_id,))
             conn.commit()
 
-    # Mapping-Helfer
+    # ------------------- Mapping -------------------
+
     @staticmethod
     def _row_to_model(row) -> Bearbeitung:
-        # Datum-Parsing (ISO-Strings → date). SQLite gibt Strings zurück.
-        def parse_date(val) -> Optional[date]:
-            return None if val is None else date.fromisoformat(val)
-
         return Bearbeitung(
-            id=row["id"],
-            kurs_id=row["kurs_id"],
-            student_id=row["student_id"],
-            start_datum=parse_date(row["start_datum"]),  # type: ignore[arg-type]
+            id=int(row["id"]),
+            student_id=int(row["student_id"]),
+            kurs_id=int(row["kurs_id"]),
             status=StatusBearbeitung(row["status"]),
-            thema=row["thema"],
-            abgabe_datum=parse_date(row["abgabe_datum"]),
+            plan_start=_parse_date(row["plan_start"]),
+            plan_end=_parse_date(row["plan_end"]),
+            start_datum=_parse_date(row["start_datum"]),
+            abgabe_datum=_parse_date(row["abgabe_datum"]),
         )

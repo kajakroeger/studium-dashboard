@@ -9,6 +9,7 @@ from .kurs import Kurs
 from .bearbeitung import Bearbeitung, StatusBearbeitung
 from .pruefung import Pruefung, Pruefungsform
 from .einschreibung import Einschreibung, StatusEinschreibung
+from .studiengang import Studiengang
 
 __all__ = [
     "Student", 
@@ -19,5 +20,6 @@ __all__ = [
     "Pruefungsform", 
     "Einschreibung", 
     "StatusEinschreibung",
+    "Studiengang",
 ]
 

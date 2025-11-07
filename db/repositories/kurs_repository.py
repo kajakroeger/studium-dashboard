@@ -36,3 +36,14 @@ class KursRepository(ABC):
     def delete(self, kurs_id: int) -> None: 
         """Löscht einen Datensatz (falls vorhanden, ansonsten no-op)."""
         raise NotImplementedError
+    
+    @abstractmethod
+    def exists_by_name(self, name: str) -> bool:
+        """Liefert einen Kurs anhand des Kürzels oder None, falls nicht vorhanden."""
+        raise NotImplementedError
+    
+    @abstractmethod
+    def exists_by_kuerzel(self, kurs_kuerzel: str) -> bool:
+        """Liefert einen Kurs anhand des Kürzels oder None, falls nicht vorhanden."""
+        raise NotImplementedError
+

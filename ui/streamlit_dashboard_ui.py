@@ -124,7 +124,6 @@ class StreamlitDashboardUI(UIAdapter):
                     "Bearbeitung-ID": b.bearbeitung_id,
                     "Kurs-ID": b.kurs_id,
                     "Status": b.status.value,
-                    "Thema": b.thema,
                     "Tage in Bearbeitung": b.tage_bearbeitung,
                     "Prüfung bestanden": _fmt_bool(b.pruefung_bestehen),
                     "Note": b.pruefung_note,

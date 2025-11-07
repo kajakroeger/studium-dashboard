@@ -23,6 +23,7 @@ class Kurs:
     ects: int
     tutor: str
     semester: Optional["Semester"] = None  # Rückverweis auf das zugehörige Semester
+    id: Optional[int] = None  # Primärschlüssel, wird von der DB gesetzt
 
     def __str__(self) -> str:
         semester_info = f" (Semester {self.semester.nummer})" if self.semester else ""

@@ -33,10 +33,10 @@ class Pruefung:
     id: int
     bearbeitung: Bearbeitung
     pruefungsform: Pruefungsform
-    note: Optional[float] = None
     versuch_nr: int = 0
+    note: Optional[float] = None
     bestanden: Optional[bool] = None
-    letzter_versuch: bool = False  # neu: markiert, ob kein weiterer Versuch erlaubt ist
+    letzter_versuch: bool = False  # markiert, ob kein weiterer Versuch erlaubt ist
 
     def note_eintragen(self, note: float) -> None:
         """

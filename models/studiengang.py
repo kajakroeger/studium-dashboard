@@ -6,7 +6,7 @@ bestehend aus mehreren Semestern.
 """
 
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 from .semester import Semester
 
 
@@ -19,6 +19,7 @@ class Studiengang:
     anzahl_kurse: int
     ects_gesamt: int
     semester: List[Semester] = field(default_factory=list)
+    id: Optional[int] = None  # Primärschlüssel, wird von der DB gesetzt
 
     def __str__(self) -> str:
         """Gibt den Namen des Studiengangs aus."""

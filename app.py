@@ -1,24 +1,19 @@
 """
-App-Einstiegspunkt für das Studium Dashboard.
-
+ui/app.py
+Streamlit-Einstieg: baut Service, setzt Page Config, rendert Dashboard-Seite.
 Start:
-    streamlit run app.py
+    streamlit run ui/app.py
 """
-
-from ui.streamlit_dashboard_ui import StreamlitDashboardUI, _build_service
-
+import streamlit as st
+from ui.setup import build_service
+from ui.pages.dashboard_page import render_dashboard
+from ui.theming import apply_global_theme
 
 def main() -> None:
-    # Datenbankpfad kannst du hier anpassen oder aus env lesen
-    db_path = "studium.db"
-
-    # Service + Repositories aufbauen
-    service, student_repo = _build_service(db_path)
-
-    # Dashboard-UI starten
-    ui = StreamlitDashboardUI(service, student_repo)
-    ui.zeige_dashboard()
-
+    st.set_page_config(page_title="Studium Dashboard", page_icon="🎓", layout="wide")
+    service, student_repo = build_service("studium.db")
+    render_dashboard(service, student_repo)
+    # apply_global_theme()
 
 if __name__ == "__main__":
     main()

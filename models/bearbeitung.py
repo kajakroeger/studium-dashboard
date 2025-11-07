@@ -23,14 +23,14 @@ class StatusBearbeitung(Enum):
 class Bearbeitung:
     """Repräsentiert eine Bearbeitung (z. B. Projekt, Hausarbeit) zu einem Kurs."""
 
-    id: int
-    kurs_id: int
     student_id: int
-    plan_start: date                        # Geplantes Datum für den Start der Bearbeitung
-    plan_end: date                          # Geplantes Datum für die Abgabe der Bearbeitung
-    start_datum: date                       # Datum, an dem die Bearbeitung begonnen wurde
-    abgabe_datum: Optional[date] = None     # Datum, an dem die Bearbeitung abgegeben wurde
+    kurs_id: int
+    plan_start: Optional[date] = None                       # Geplantes Datum für den Start der Bearbeitung
+    plan_end: Optional[date] = None                         # Geplantes Datum für die Abgabe der Bearbeitung
+    start_datum: Optional[date] = None   
+    abgabe_datum: Optional[date] = None                     # Datum, an dem die Bearbeitung abgegeben wurde
     status:  StatusBearbeitung = StatusBearbeitung.INAKTIV  # Status der Bearbeitung
+    id: Optional[int] = None                # Primärschlüssel, wird von der DB gesetzt
 
 
     def bearbeitung_abgeben(self, abgabe_datum: date):

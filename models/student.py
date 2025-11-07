@@ -29,11 +29,12 @@ class Student:
         uni_email: Universitätsadresse (optional)
     """
 
-    id: int
     name: str
     matrikelnummer: str
     email: Optional[str] = None
     uni_email: Optional[str] = None
+    id: Optional[int] = None  # Primärschlüssel, wird von der DB gesetzt
+
 
     # Eine Liste aller Einschreibungen dieses Studierenden
     einschreibungen: List["Einschreibung"] = field(default_factory=list)
