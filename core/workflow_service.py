@@ -19,16 +19,18 @@ class WorkflowService:
         kurs_repo,
         pruefung_repo,
         einschreibung_repo,
-        studiengang_repo: StudiengangRepository,   # ⬅️ wichtig: wird injiziert
+        studiengang_repo, # StudiengangRepository,   # ⬅️ wichtig: wird injiziert
         ects_summe_bestanden_fn,
+        notenschnitt_fn=None,
     ) -> None:
         self._students = student_repo
         self._bearb = bearbeitung_repo
         self._kurse = kurs_repo
         self._pruef = pruefung_repo
         self._einschreibungen = einschreibung_repo
-        self._studiengaenge = studiengang_repo      # ⬅️ speichern
+        self._studiengang_repo = studiengang_repo      # ⬅️ speichern
         self._ects_summe_bestanden_fn = ects_summe_bestanden_fn
+        self._notenschnitt_fn = notenschnitt_fn
 
     # ------- Hilfsfunktion: liefert eine Studiengang-ID ------------------------
     def _ensure_studiengang(
@@ -45,7 +47,7 @@ class WorkflowService:
         if not name or anzahl_monate is None or anzahl_kurse is None or ects_gesamt is None:
             raise ValueError("Studiengangdaten unvollständig (Name/Monate/Kurse/ECTS).")
 
-        existing = self._studiengaenge.get_by_name(name)
+        existing = self._studiengang_repo.get_by_name(name)
         if existing and existing.id is not None:
             return existing.id
 
@@ -55,7 +57,7 @@ class WorkflowService:
             anzahl_kurse=int(anzahl_kurse),
             ects_gesamt=int(ects_gesamt),
         )
-        return self._studiengaenge.create(sg)
+        return self._studiengang_repo.create(sg)
 
     # --------------------------- Onboarding-Use-Case ---------------------------
     def create_student(
@@ -178,22 +180,27 @@ class WorkflowService:
     
 
 
-    def pruefung_abgeben(self, *, student_id: int, kurs_id: int, abgabe_datum: date) -> None:
+    def pruefung_abgeben(self, *, student_id: int, kurs_id: int, abgabe_datum: date):
         """
-        Setzt das Abgabedatum für die Bearbeitung eines Kurses.
-        Ändert den Status auf PRUEFUNG_EINGEREICHT.
+        Markiert die Prüfung als abgegeben und setzt Bearbeitungsstatus → 'pruefung_eingereicht'.
         """
-        # 1) Bearbeitung für diesen Kurs finden
-        bearbeitungen = self._bearb.all_for_student(student_id)
-        bearb = next((b for b in bearbeitungen if b.kurs_id == kurs_id), None)
-        
-        if not bearb:
-            raise ValueError(f"Keine Bearbeitung für Kurs {kurs_id} gefunden")
-        
-        # 2) Abgabedatum setzen und Status ändern
-        bearb.abgabe_datum = abgabe_datum
-        bearb.status = StatusBearbeitung.PRUEFUNG_EINGEREICHT
-        self._bearb.update(bearb)
+        # 1) Abgabe vermerken (lege einen Prüfungs-Datensatz an oder update)
+        self._pruefung_repo.mark_abgegeben(
+            student_id=student_id,
+            kurs_id=kurs_id,
+            abgabe_datum=abgabe_datum,
+        )
+
+        # 2) Bearbeitungsstatus aktualisieren
+        set_status = getattr(self._bearbeitung_repo, "set_status", None)
+        if callable(set_status):
+            self._bearbeitung_repo.set_status(student_id=student_id, kurs_id=kurs_id, status="pruefung_eingereicht")
+        else:
+            # Fallback: Bearbeitung holen und speichern
+            b = self._bearbeitung_repo.get_by_student_and_kurs(student_id, kurs_id)
+            if b:
+                b.status = "pruefung_eingereicht"
+                self._bearbeitung_repo.update(b)
 
 
     def note_fuer_kurs_eintragen(
@@ -243,9 +250,9 @@ class WorkflowService:
         """
         # 1) ECTS prüfen
         if erforderliche_ects is not None:
-            ects_erreicht = self._ects_summe_bestanden_fn(student_id)
-            if ects_erreicht < erforderliche_ects:
-                return False  # Noch nicht genug ECTS
+            if erforderliche_ects is not None:
+                if self._ects_summe_bestanden_fn(student_id) < erforderliche_ects:
+                    return False
         
         # 2) Prüfen, ob alle Kurse bestanden
         bearbeitungen = self._bearb.all_for_student(student_id)
@@ -257,10 +264,26 @@ class WorkflowService:
         # 3) Einschreibung abschließen
         eins = self._einschreibungen.get_aktive_fuer_student(student_id)
         if eins:
-            eins.abschliessen(
-                enddatum=date.today(),
-                notenschnitt=self._progress.berechne_notenschnitt(student_id) or 0.0
-            )
+            notenschnitt = self._notenschnitt_fn(student_id) if callable(self._notenschnitt_fn) else 0.0
+            eins.abschliessen(enddatum=date.today(), notenschnitt=notenschnitt)
             self._einschreibungen.update(eins)
-        
         return True
+    
+
+    # ---------- NEU: Ziel-ECTS aus Studiengang für den Student ----------
+    def ziel_ects(self, student_id: int) -> int:
+        """
+        Liefert die zu erreichenden ECTS aus dem Studiengang des Studenten.
+        Fallback: 180, falls nicht ableitbar.
+        """
+        # 1) Einschreibung des Studenten -> studiengang_id
+        einschreibung = getattr(self._einschreibung_repo, "get_by_student", None)
+        if callable(einschreibung):
+            enr = self._einschreibung_repo.get_by_student(student_id)
+            if enr and getattr(enr, "studiengang_id", None) is not None:
+                sg = self._studiengang_repo.get(enr.studiengang_id)
+                # versuche gängige Feldnamen:
+                for attr in ("ziel_ects", "ects_gesamt", "ects", "ects_total"):
+                    v = getattr(sg, attr, None)
+                    if v is not None:
+                        return int(v)

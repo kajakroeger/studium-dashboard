@@ -60,13 +60,4 @@ class ProgressService:
         return self._pruef.get_by_bearbeitung_id(bearbeitung_id)
     
 
-    def kurs_name_exists(self, name: str) -> bool:
-        """Prüft, ob ein Kurs mit dem gegebenen Namen existiert (case-insensitive)."""
-        return self._kurse.exists_by_name(name)
-    
-    def kurs_kuerzel_exists(self, kurs_kuerzel: str) -> bool:
-        """Prüft, ob ein Kurs mit dem gegebenen Kürzel existiert (case-insensitive)."""
-        return self._kurse.exists_by_kuerzel(kurs_kuerzel)
 
-    # hier würden auch Methoden wie "gesamtuebersicht(...)" liegen,
-    # die deine KPI-DTOs befüllen.

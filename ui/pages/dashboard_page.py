@@ -5,11 +5,15 @@ Orchestriert die Dashboard-Seite: Auswahl, Laden, Komponenten rendern.
 from typing import Optional
 import streamlit as st
 from db.repositories.student_repository import StudentRepository
-from ui.components.goals import render_goals_row
-
 from ui.components.action_bar import render_action_bar
 
-def render_dashboard(service, students):
+# Kachel-Komponenten
+from ui.components.studienziele import render_studienziele
+from ui.components.studienziele_status import render_studienziele_status
+from ui.components.status_uebersicht import render_status_uebersicht
+from ui.components.burndown_chart import render_burndown_chart
+
+def render_dashboard(service, students: StudentRepository):
     st.title("🎓 Studium Dashboard")
 
     alle = list(students.all())
@@ -25,14 +29,22 @@ def render_dashboard(service, students):
         st.info("Bitte wähle einen Studenten in der Sidebar aus.")
         return
 
-    # Action-Bar oben
+    # Action-Bar
     render_action_bar(service, students, student_id)
 
-    # Ziele + Status
-    render_goals_row(service, student_id)
+    # ===== Row 1: Studienziele + Aktueller Status =====
+    left, right = st.columns(2, gap="large")
+    with left:
+        render_studienziele(service, student_id)
+    with right:
+        render_studienziele_status(service, student_id)
 
-
-
+    # ===== Row 2: Status Übersicht + Burn-Down =====
+    row2_left, row2_right = st.columns(2, gap="large")
+    with row2_left:
+        render_status_uebersicht(service, student_id)
+    with row2_right:
+        render_burndown_chart(service, student_id)
 
 def _student_selectbox(students: StudentRepository) -> Optional[int]:
     alle = list(students.all())

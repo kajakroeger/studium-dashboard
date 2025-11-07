@@ -64,6 +64,7 @@ class FortschrittService:
             einschreibung_repo=einschreibung_repo,
             studiengang_repo=studiengang_repo,
             ects_summe_bestanden_fn=self._progress.ects_summe_bestanden,
+            notenschnitt_fn=self._progress.berechne_notenschnitt,
         )
 
     # --------------------------------------------------------
@@ -109,6 +110,46 @@ class FortschrittService:
 
     def kurs_kuerzel_exists(self, kz: str) -> bool:
         return self._kurs_repo.exists_by_kuerzel((kz or "").strip())
+    
+
+    # Für die UI: Kurse, deren Bearbeitung aktiv ist und NICHT eingereicht
+    def kurse_fuer_pruefungsabgabe(self, student_id: int):
+        """
+        Liefert Kurs-Objekte für selectbox:
+        - Bearbeitungsstatus in {'aktiv','in_bearbeitung'} (passe an deine Enum/Strings an)
+        - nicht 'pruefung_eingereicht', nicht 'abgeschlossen'
+        """
+        # minimal generisch via Bearbeitungen → Kurs joinen
+        items = []
+        get_bearb = getattr(self._bearbeitung_repo, "list_by_student", None)
+        if callable(get_bearb):
+            for b in self._bearbeitung_repo.list_by_student(student_id):
+                status = str(getattr(b, "status", "")).lower()
+                if status in {"aktiv", "in_bearbeitung"}:
+                    k = self._kurs_repo.get(getattr(b, "kurs_id", None))
+                    if k is not None:
+                        items.append(k)
+        else:
+            # Fallback: direkt aus Kurs-Repo, wenn du dort eine Methode hast
+            get_kurse = getattr(self._kurs_repo, "list_aktiv_ohne_einreichung", None)
+            if callable(get_kurse):
+                items = list(self._kurs_repo.list_aktiv_ohne_einreichung(student_id))
+        return items
+    
+    # core/__init__.py – in class FortschrittService
+    def ziel_ects(self, student_id: int) -> int:
+        """ECTS-Ziel aus dem Studiengang der aktiven Einschreibung."""
+        e = getattr(self._einschreibung_repo, "get_aktive_fuer_student", lambda _sid: None)(student_id)
+        if e and getattr(e, "studiengang_id", None) is not None:
+            sg = self._studiengang_repo.get(e.studiengang_id)
+            return int(
+                getattr(sg, "ects_gesamt", None)
+                or getattr(sg, "ziel_ects", None)
+                or getattr(sg, "ects_total", None)
+                or 180
+            )
+        return 180
+
     
 
 # --------------------------------------------------------
