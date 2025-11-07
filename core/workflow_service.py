@@ -175,3 +175,92 @@ class WorkflowService:
 
     def kurs_kuerzel_exists(self, kuerzel: str) -> bool:
         return self.kurs_repo.exists_by_kuerzel((kuerzel or "").strip())
+    
+
+
+    def pruefung_abgeben(self, *, student_id: int, kurs_id: int, abgabe_datum: date) -> None:
+        """
+        Setzt das Abgabedatum für die Bearbeitung eines Kurses.
+        Ändert den Status auf PRUEFUNG_EINGEREICHT.
+        """
+        # 1) Bearbeitung für diesen Kurs finden
+        bearbeitungen = self._bearb.all_for_student(student_id)
+        bearb = next((b for b in bearbeitungen if b.kurs_id == kurs_id), None)
+        
+        if not bearb:
+            raise ValueError(f"Keine Bearbeitung für Kurs {kurs_id} gefunden")
+        
+        # 2) Abgabedatum setzen und Status ändern
+        bearb.abgabe_datum = abgabe_datum
+        bearb.status = StatusBearbeitung.PRUEFUNG_EINGEREICHT
+        self._bearb.update(bearb)
+
+
+    def note_fuer_kurs_eintragen(
+        self, *, student_id: int, kurs_id: int, note: float
+    ) -> Pruefung:
+        """
+        Trägt eine Note für einen Kurs ein.
+        Prüft automatisch, ob bestanden (Note <= 4.0).
+        Erhöht Versuchszähler und markiert ggf. letzten Versuch.
+        """
+        # 1) Bearbeitung finden
+        bearbeitungen = self._bearb.all_for_student(student_id)
+        bearb = next((b for b in bearbeitungen if b.kurs_id == kurs_id), None)
+        
+        if not bearb:
+            raise ValueError(f"Keine Bearbeitung für Kurs {kurs_id} gefunden")
+        
+        # 2) Prüfung holen oder neu anlegen
+        pruef = self._pruef.get_by_bearbeitung_id(bearb.id)
+        
+        if not pruef:
+            raise ValueError(f"Keine Prüfung für Bearbeitung {bearb.id} gefunden")
+        
+        # 3) Note eintragen (Methode aus Pruefung-Model nutzen)
+        pruef.note_eintragen(note)
+        
+        # 4) Wenn bestanden: Bearbeitung abschließen
+        if pruef.bestanden:
+            bearb.status = StatusBearbeitung.ABGESCHLOSSEN
+            self._bearb.update(bearb)
+        
+        # 5) Prüfung speichern
+        self._pruef.update(pruef)
+        
+        return pruef
+
+
+    def studium_abschliessen(
+        self, *, student_id: int, erforderliche_ects: Optional[int] = None
+    ) -> bool:
+        """
+        Prüft, ob alle Bedingungen für den Abschluss erfüllt sind:
+        - Mindest-ECTS erreicht (falls angegeben)
+        - Alle Kurse bestanden
+        
+        Wenn ja: setzt Einschreibung auf ABGESCHLOSSEN.
+        """
+        # 1) ECTS prüfen
+        if erforderliche_ects is not None:
+            ects_erreicht = self._ects_summe_bestanden_fn(student_id)
+            if ects_erreicht < erforderliche_ects:
+                return False  # Noch nicht genug ECTS
+        
+        # 2) Prüfen, ob alle Kurse bestanden
+        bearbeitungen = self._bearb.all_for_student(student_id)
+        for b in bearbeitungen:
+            pruef = self._pruef.get_by_bearbeitung_id(b.id)
+            if not pruef or not pruef.bestanden:
+                return False  # Mindestens ein Kurs nicht bestanden
+        
+        # 3) Einschreibung abschließen
+        eins = self._einschreibungen.get_aktive_fuer_student(student_id)
+        if eins:
+            eins.abschliessen(
+                enddatum=date.today(),
+                notenschnitt=self._progress.berechne_notenschnitt(student_id) or 0.0
+            )
+            self._einschreibungen.update(eins)
+        
+        return True

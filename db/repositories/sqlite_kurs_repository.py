@@ -86,13 +86,15 @@ class SQLiteKursRepository(KursRepository):
 
     # ----- Existenzprüfungen -----
     def exists_by_name(self, name: str) -> bool:
+        """Prüft, ob ein Kurs mit dem gegebenen Namen existiert."""
         sql = "SELECT 1 FROM kurs WHERE LOWER(name) = LOWER(?) COLLATE NOCASE LIMIT 1;"
-        with self.provider.get_connection() as conn:
+        with self._provider.connect() as conn:  
             return conn.execute(sql, (name,)).fetchone() is not None
-    
+
     def exists_by_kuerzel(self, kurs_kuerzel: str) -> bool:
+        """Prüft, ob ein Kurs mit dem gegebenen Kürzel existiert."""
         sql = "SELECT 1 FROM kurs WHERE LOWER(kurs_kuerzel) = LOWER(?) COLLATE NOCASE LIMIT 1;"
-        with self.provider.get_connection() as conn:
+        with self._provider.connect() as conn:
             return conn.execute(sql, (kurs_kuerzel,)).fetchone() is not None
 
 

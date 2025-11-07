@@ -22,6 +22,17 @@ def add_kurs_dialog(service: FortschrittService, current_student_id: Optional[in
     ects = st.number_input("**ECTS***", min_value=1, max_value=30, step=1, value=5, key="dialog_add_ects")
     tutor = st.text_input("Tutor (optional)", key="dialog_add_tutor")
 
+    # Live-Validierung für Name und Kürzel
+    name_clean = name.strip()
+    kuerzel_clean = kuerzel.strip()
+    
+    # Warnungen anzeigen, wenn Name/Kürzel bereits existieren
+    if name_clean and service.kurs_name_exists(name_clean):
+        st.warning(f"⚠️ Ein Kurs mit dem Namen '{name_clean}' existiert bereits.")
+    
+    if kuerzel_clean and service.kurs_kuerzel_exists(kuerzel_clean):
+        st.warning(f"⚠️ Ein Kurs mit dem Kürzel '{kuerzel_clean}' existiert bereits.")
+
     pruefungsform = st.selectbox(
         "Prüfungsform (optional)",
         options=[None] + list(Pruefungsform),

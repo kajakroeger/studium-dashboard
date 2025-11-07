@@ -9,9 +9,13 @@ prüft automatisch, ob bestanden wurde, und handhabt bis zu 3 Versuche.
 from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from models.bearbeitung import Bearbeitung, StatusBearbeitung
+
+# Typing-Hinweis zur Vermeidung von zirkulären Importen
+if TYPE_CHECKING:
+    from models.bearbeitung import Bearbeitung
 
 
 class Pruefungsform(Enum):
@@ -31,12 +35,24 @@ class Pruefung:
     """Repräsentiert eine Prüfung (z. B. Klausur oder Projektprüfung) zu einer Bearbeitung."""
 
     id: int
-    bearbeitung: Bearbeitung
+    bearbeitung: "Bearbeitung"
     pruefungsform: Pruefungsform
     versuch_nr: int = 0
     note: Optional[float] = None
     bestanden: Optional[bool] = None
     letzter_versuch: bool = False  # markiert, ob kein weiterer Versuch erlaubt ist
+
+    def __post_init__(self):
+        """Validierung nach der Instanziierung."""
+        if self.note is not None:
+            if not (1.0 <= self.note <= 5.0):
+                raise ValueError(f"Note muss zwischen 1.0 und 5.0 liegen, nicht {self.note}")
+        
+        if self.versuch_nr < 0:
+            raise ValueError("Versuch-Nr kann nicht negativ sein")
+        
+        if self.versuch_nr > 3:
+            raise ValueError("Maximal 3 Versuche erlaubt")
 
     def note_eintragen(self, note: float) -> None:
         """

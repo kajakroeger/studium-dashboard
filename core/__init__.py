@@ -36,7 +36,7 @@ class FortschrittService:
         self._einschreibung_repo = einschreibung_repo
         self._studiengang_repo = studiengang_repo
 
-        self._kurs_repository = kurs_repo  # <— diese Zeile neu
+        self._kurs_repository = kurs_repo  
 
 
         # Sub-Services instanzieren
@@ -104,17 +104,12 @@ class FortschrittService:
     def studium_abschliessen(self, **kwargs):
         return self._workflow.studium_abschliessen(**kwargs)
     
-
-    # ----- Existenz-Checks für die UI -----
-
     def kurs_name_exists(self, name: str) -> bool:
-        """Prüft, ob ein Kurs mit dem gegebenen Namen existiert (case-insensitive)."""
-        return self._kurs_repository.exists_by_name(name)
-    
-    def kurs_kuerzel_exists(self, kurs_kuerzel: str) -> bool:
-        """Prüft, ob ein Kurs mit dem gegebenen Kürzel existiert (case-insensitive)."""
-        return self._kurs_repository.exists_by_kuerzel(kurs_kuerzel)
+        return self._kurs_repo.exists_by_name((name or "").strip())
 
+    def kurs_kuerzel_exists(self, kz: str) -> bool:
+        return self._kurs_repo.exists_by_kuerzel((kz or "").strip())
+    
 
 # --------------------------------------------------------
 # Öffentliche Exporte für andere Module
