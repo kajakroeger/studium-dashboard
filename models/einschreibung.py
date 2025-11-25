@@ -34,29 +34,29 @@ class Einschreibung:
     start_datum: date
     ziel_enddatum: date
     ziel_notenschnitt: float
+    
     status: StatusEinschreibung = StatusEinschreibung.AKTIV
+    end_datum: Optional[date] = None 
+    abschluss_note: Optional[float] = None
+    abbruch_grund: Optional[str] = None
     studiengang_id: Optional[int] = None
     id: Optional[int] = None  # Primärschlüssel, wird von der DB gesetzt
 
-    enddatum_tatsaechlich: Optional[date] = None
-    notenschnitt_tatsaechlich: Optional[float] = None
-    abbruch_grund: Optional[str] = None
-
     def abschliessen(self, enddatum: date, notenschnitt: float) -> None:
-        self.enddatum_tatsaechlich = enddatum
-        self.notenschnitt_tatsaechlich = notenschnitt
+        self.end_datum = enddatum
+        self.abschluss_note = notenschnitt
         self.status = StatusEinschreibung.ABGESCHLOSSEN
 
-    def abbrechen(self, grund: Optional[str] = None, enddatum: Optional[date] = None) -> None:
+    def abbrechen(self, grund: Optional[str] = None, enddatum: date = None) -> None:
         self.abbruch_grund = grund
-        self.enddatum_tatsaechlich = enddatum
+        self.end_datum = enddatum
         self.status = StatusEinschreibung.ABGEBROCHEN
 
     def dauer_bis_ziel(self) -> timedelta:
         return self.ziel_enddatum - self.start_datum
     
     def dauer_tatsaechlich(self) -> Optional[timedelta]:
-        if self.enddatum_tatsaechlich is None:
+        if self.end_datum is None:
             return None
-        return self.enddatum_tatsaechlich - self.start_datum
+        return self.end_datum - self.start_datum
 

@@ -13,18 +13,19 @@ from models.pruefung import Pruefungsform
 # =================== DIALOG-FUNKTIONEN ===================
 
 @st.dialog("Kurs hinzufügen")
-def add_kurs_dialog(service: FortschrittService, current_student_id: Optional[int]):
+def add_kurs_dialog(service: FortschrittService, student_id: Optional[int]):
     """Dialog zum Hinzufügen eines neuen Kurses."""
     st.caption("📘 Neuen Kurs anlegen")
+    st.write(f"Student-ID: '{student_id}'")
     
     name = st.text_input("**Name***", key="dialog_add_name")
-    kuerzel = st.text_input("**Kurskürzel***", key="dialog_add_kuerzel")
+    kurs_kuerzel = st.text_input("**Kurskürzel***", key="dialog_add_kuerzel")
     ects = st.number_input("**ECTS***", min_value=1, max_value=30, step=1, value=5, key="dialog_add_ects")
     tutor = st.text_input("Tutor (optional)", key="dialog_add_tutor")
 
     # Live-Validierung für Name und Kürzel
     name_clean = name.strip()
-    kuerzel_clean = kuerzel.strip()
+    kuerzel_clean = kurs_kuerzel.strip()
     
     # Warnungen anzeigen, wenn Name/Kürzel bereits existieren
     if name_clean and service.kurs_name_exists(name_clean):
@@ -42,7 +43,7 @@ def add_kurs_dialog(service: FortschrittService, current_student_id: Optional[in
 
     c1, c2, c3 = st.columns(3)
     plan_start = c1.date_input("Geplanter Start (opt.)", value=None, key="dialog_add_plan_start")
-    plan_ende = c2.date_input("Geplante Abgabe (opt.)", value=None, key="dialog_add_plan_ende")
+    plan_end = c2.date_input("Geplante Abgabe (opt.)", value=None, key="dialog_add_plan_ende")
     start_datum = c3.date_input("Tatsächlicher Start (opt.)", value=None, key="dialog_add_start_datum")
 
     st.divider()
@@ -52,7 +53,7 @@ def add_kurs_dialog(service: FortschrittService, current_student_id: Optional[in
         st.rerun()
     
     if col_save.button("💾 Speichern", type="primary", use_container_width=True):
-        if not current_student_id:
+        if not student_id:
             st.error("Bitte zuerst einen Studenten auswählen/anlegen.")
             return
         
@@ -60,20 +61,20 @@ def add_kurs_dialog(service: FortschrittService, current_student_id: Optional[in
         if not name.strip():
             st.error("Bitte einen Namen eingeben.")
             return
-        if not kuerzel.strip():
+        if not kurs_kuerzel.strip():
             st.error("Bitte ein Kurskürzel eingeben.")
             return
         
         try:
             service.add_kurs_mit_bearbeitung_und_pruefung(
-                student_id=current_student_id,
+                student_id=student_id,
                 name=name.strip(),
-                kuerzel=kuerzel.strip(),
+                kurs_kuerzel=kurs_kuerzel.strip(),
                 ects=int(ects),
                 tutor=(tutor.strip() or None),
                 pruefungsform=pruefungsform,
                 plan_start=plan_start or None,
-                plan_ende=plan_ende or None,
+                plan_end=plan_end or None,
                 start_datum=start_datum or None,
             )
             st.session_state["add_kurs__just_saved"] = True
@@ -82,55 +83,67 @@ def add_kurs_dialog(service: FortschrittService, current_student_id: Optional[in
             st.error(f"❌ Speichern fehlgeschlagen: {ex}")
 
 
+# ui/components/action_bar.py - verbesserte Version:
+
 @st.dialog("Prüfung abgeben")
 def submit_pruefung_dialog(service: FortschrittService, current_student_id: Optional[int]):
     """Dialog zum Abgeben einer Prüfung."""
     st.caption("📝 Kurs wählen und Abgabedatum setzen")
     
-
+    if not current_student_id:
+        st.error("Bitte zuerst einen Studenten auswählen/anlegen.")
+        return
+    
     # Kurse laden, die aktiv sind & noch nicht eingereicht
-    # Erwartet: Liste von Objekten mit id, name, kurs_kuerzel (optional)
-    kurse = getattr(service, "kurse_fuer_pruefungsabgabe", lambda sid: [])(current_student_id)
+    try:
+        kurse = service.kurse_fuer_pruefungsabgabe(current_student_id)
+    except Exception as ex:
+        st.error(f"Fehler beim Laden der Kurse: {ex}")
+        return
+
+    if not kurse:
+        st.info("Keine aktiven Kurse vorhanden, die eingereicht werden können.")
+        st.caption("💡 **Tipp:** Füge zuerst einen Kurs hinzu und starte die Bearbeitung.")
+        return
 
     # Optionen bauen (Label → ID)
     options = []
     values = []
+    
     for k in kurse:
-        kuerzel = getattr(k, "kurs_kuerzel", None) or getattr(k, "kuerzel", None) or ""
-        label = f"{kuerzel+' – ' if kuerzel else ''}{getattr(k, 'name', 'Kurs')}"
+        kurs_kuerzel = k.kurs_kuerzel or ""  # Nutze direkten Attributzugriff
+        label = f"{kurs_kuerzel+' – ' if kurs_kuerzel else ''}{k.name}"
         options.append(label)
-        values.append(getattr(k, "id", None))
+        values.append(k.id)
 
-    if not options:
-        st.info("Keine aktiven Kurse vorhanden, die eingereicht werden können.")
-    else:
-        # Selectbox zeigt Label, wir halten parallel den Kurs-ID-Wert
-        idx = st.selectbox("**Kurs***", list(range(len(options))), format_func=lambda i: options[i], key="submit_kurs_idx")
-        kurs_id = values[idx]
+    # Selectbox zeigt Label, wir halten parallel den Kurs-ID-Wert
+    idx = st.selectbox(
+        "**Kurs***", 
+        list(range(len(options))), 
+        format_func=lambda i: options[i], 
+        key="submit_kurs_idx"
+    )
+    kurs_id = values[idx]
 
-        abgabe = st.date_input("**Abgabedatum***", value=date.today(), key="submit_abgabe")
+    abgabe = st.date_input("**Abgabedatum***", value=date.today(), key="submit_abgabe")
 
-        st.divider()
-        col_cancel, col_save = st.columns([1, 1])
-        
-        if col_cancel.button("❌ Abbrechen", use_container_width=True):
+    st.divider()
+    col_cancel, col_save = st.columns([1, 1])
+    
+    if col_cancel.button("❌ Abbrechen", use_container_width=True):
+        st.rerun()
+    
+    if col_save.button("📤 Abgeben", type="primary", use_container_width=True):
+        try:
+            service.pruefung_abgeben(
+                student_id=current_student_id,
+                kurs_id=int(kurs_id),
+                abgabe_datum=abgabe,
+            )
+            st.session_state["submit_pruefung__just_saved"] = True
             st.rerun()
-        
-        if col_save.button("📤 Abgeben", type="primary", use_container_width=True):
-            if not current_student_id:
-                st.error("Bitte zuerst einen Studenten auswählen/anlegen.")
-                return
-            
-            try:
-                service.pruefung_abgeben(
-                    student_id=current_student_id,
-                    kurs_id=int(kurs_id),
-                    abgabe_datum=abgabe,
-                )
-                st.session_state["submit_pruefung__just_saved"] = True
-                st.rerun()
-            except Exception as ex:
-                st.error(f"❌ Fehler beim Abgeben: {ex}")
+        except Exception as ex:
+            st.error(f"❌ Fehler beim Abgeben: {ex}")
 
 
 @st.dialog("Bewertung eintragen")

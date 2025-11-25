@@ -31,7 +31,7 @@ class SQLiteKursRepository(KursRepository):
             kurs_kuerzel TEXT NOT NULL,
             ects INTEGER NOT NULL,
             tutor TEXT,
-            semester_nummer INTEGER
+            semester INTEGER
         );
         """
         with self._provider.connect() as conn:
@@ -44,7 +44,7 @@ class SQLiteKursRepository(KursRepository):
     def get_by_id(self, kurs_id: int) -> Optional[Kurs]:
         with self._provider.connect() as conn:
             row = conn.execute(
-                "SELECT id, name, kurs_kuerzel, ects, tutor, semester_nummer FROM kurs WHERE id=?",
+                "SELECT id, name, kurs_kuerzel, ects, tutor, semester FROM kurs WHERE id=?",
                 (kurs_id,),
             ).fetchone()
         return None if row is None else self._row_to_model(row)
@@ -52,7 +52,7 @@ class SQLiteKursRepository(KursRepository):
     def all(self) -> Iterable[Kurs]:
         with self._provider.connect() as conn:
             rows = conn.execute(
-                "SELECT id, name, kurs_kuerzel, ects, tutor, semester_nummer FROM kurs ORDER BY name"
+                "SELECT id, name, kurs_kuerzel, ects, tutor, semester FROM kurs ORDER BY name"
             ).fetchall()
         return [self._row_to_model(r) for r in rows]
 
@@ -60,12 +60,12 @@ class SQLiteKursRepository(KursRepository):
         try:    
             with self._provider.connect() as conn:
                 cur = conn.execute(
-                    "INSERT INTO kurs (name, kurs_kuerzel, ects, tutor, semester_nummer) VALUES (?,?,?,?,?)",
+                    "INSERT INTO kurs (name, kurs_kuerzel, ects, tutor, semester) VALUES (?,?,?,?,?)",
                     (kurs.name, kurs.kurs_kuerzel, kurs.ects, getattr(kurs, "tutor", None), getattr(kurs.semester, "nummer", None)),
                 )
                 conn.commit()
-                new_id = int(cur.lastrowid)  # type: ignore[arg-type]
-            setattr(kurs, "id", new_id)
+                new_id = int(cur.lastrowid)  
+            kurs.id = new_id
             return new_id
         except sqlite3.IntegrityError as e:
             raise ValueError("Kurs mit diesem Namen oder Kürzel existiert bereits.") from e
@@ -73,7 +73,7 @@ class SQLiteKursRepository(KursRepository):
     def update(self, kurs: Kurs) -> None:
         with self._provider.connect() as conn:
             conn.execute(
-                "UPDATE kurs SET name=?, kurs_kuerzel=?, ects=?, tutor=?, semester_nummer=? WHERE id=?",
+                "UPDATE kurs SET name=?, kurs_kuerzel=?, ects=?, tutor=?, semester=? WHERE id=?",
                 (kurs.name, kurs.kurs_kuerzel, kurs.ects, getattr(kurs, "tutor", None), getattr(kurs.semester, "nummer", None), getattr(kurs, "id", None)),
             )
             conn.commit()
@@ -103,9 +103,10 @@ class SQLiteKursRepository(KursRepository):
     def _row_to_model(row) -> Kurs:
         """Konvertiert eine sqlite3.Row in ein Kurs-Objekt."""
         return Kurs(
+            id=int(row["id"]),
             name=row["name"],
             kurs_kuerzel=row["kurs_kuerzel"],
             ects=row["ects"],
             tutor=row["tutor"],
-            semester=None,  # Falls du Semester-Objekte laden willst, später via SemesterRepo verknüpfen
+            semester=row["semester"],  # Falls du Semester-Objekte laden willst, später via SemesterRepo verknüpfen
         )

@@ -16,7 +16,7 @@ def _init_state() -> None:
 def _step1(service: FortschrittService) -> None:
     st.subheader("Schritt 1/2 – Deine Daten & Studienziele")
     with st.form("onb_step1"):
-        name = st.text_input("Voller Name *")
+        name = st.text_input("Username *")
         matrikel = st.text_input("Matrikelnummer *")
         email = st.text_input("E-Mail (optional)")
         uni_email = st.text_input("Uni-E-Mail (optional)")

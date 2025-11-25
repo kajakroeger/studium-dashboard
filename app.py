@@ -9,10 +9,12 @@ from ui.setup import build_service
 from ui.pages.dashboard_page import render_dashboard
 from ui.theming import apply_global_theme
 
+
 def main() -> None:
     st.set_page_config(page_title="Studium Dashboard", page_icon="🎓", layout="wide")
     service, student_repo = build_service("studium.db")
-    render_dashboard(service, student_repo)
+    render_dashboard(service, student_repo)    
+
     # apply_global_theme()
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ class BearbeitungRepository(ABC):
         raise NotImplementedError
     
     @abstractmethod
-    def all_for_student(self, student_id: int) -> Iterable[Bearbeitung]: 
+    def einschreibungen_fuer_student(self, student_id: int) -> Iterable[Bearbeitung]: 
         """Liefert alle Bearbeitungen für einen Studenten."""
         raise NotImplementedError
     

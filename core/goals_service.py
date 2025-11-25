@@ -105,7 +105,7 @@ class GoalsService:
     # ---------- private Helfer ----------
     def _noten_liste(self, student_id: int) -> list[float]:
         noten: list[float] = []
-        for b in self._bearb.all_for_student(student_id):
+        for b in self._bearb.einschreibungen_fuer_student(student_id):
             p = self._pruef.get_by_bearbeitung_id(b.id)
             if p and p.note is not None:
                 noten.append(p.note)
@@ -113,7 +113,7 @@ class GoalsService:
 
     def _anzahl_offen(self, student_id: int) -> int:
         offen = 0
-        for b in self._bearb.all_for_student(student_id):
+        for b in self._bearb.einschreibungen_fuer_student(student_id):
             p = self._pruef.get_by_bearbeitung_id(b.id)
             if not p or not p.bestanden:
                 offen += 1
@@ -121,7 +121,7 @@ class GoalsService:
 
     def _durchschnitt_bearbeitungszeit_tage(self, student_id: int) -> Optional[float]:
         zeiten: list[int] = []
-        for b in self._bearb.all_for_student(student_id):
+        for b in self._bearb.einschreibungen_fuer_student(student_id):
             if b.abgabe_datum and b.start_datum:
                 zeiten.append((b.abgabe_datum - b.start_datum).days)
         if not zeiten:

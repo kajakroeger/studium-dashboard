@@ -33,14 +33,14 @@ class Pruefungsform(Enum):
 @dataclass
 class Pruefung:
     """Repräsentiert eine Prüfung (z. B. Klausur oder Projektprüfung) zu einer Bearbeitung."""
-
-    id: int
-    bearbeitung: "Bearbeitung"
     pruefungsform: Pruefungsform
+    bearbeitung_id: int = 0
     versuch_nr: int = 0
     note: Optional[float] = None
     bestanden: Optional[bool] = None
     letzter_versuch: bool = False  # markiert, ob kein weiterer Versuch erlaubt ist
+    id: Optional[int] = None
+
 
     def __post_init__(self):
         """Validierung nach der Instanziierung."""

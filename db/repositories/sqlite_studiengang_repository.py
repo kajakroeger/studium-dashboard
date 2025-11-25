@@ -14,6 +14,9 @@ class SQLiteStudiengangRepository(StudiengangRepository):
         self._provider = provider
         self._ensure_schema()
 
+    def provider(self):
+        return self._provider
+
     def _ensure_schema(self) -> None:
         with self._provider.connect() as conn:
             conn.execute("""
@@ -38,7 +41,7 @@ class SQLiteStudiengangRepository(StudiengangRepository):
         s.id = new_id
         return new_id
 
-    def get_by_id(self, sid: int) -> Optional[Studiengang]:
+    def get_by_id(self, sid: int) -> Studiengang:
         with self._provider.connect() as conn:
             row = conn.execute("SELECT * FROM studiengang WHERE id=?", (sid,)).fetchone()
         if not row:
@@ -50,14 +53,33 @@ class SQLiteStudiengangRepository(StudiengangRepository):
             anzahl_kurse=int(row["anzahl_kurse"]),
             ects_gesamt=int(row["ects_gesamt"]),
         )
+    
 
-    def get_by_name(self, name: str) -> Optional[Studiengang]:
+    def get_by_name(self, name: str) -> Studiengang:
         with self._provider.connect() as conn:
             row = conn.execute("SELECT * FROM studiengang WHERE name=?", (name,)).fetchone()
         if not row:
             return None
         return Studiengang(
             id=int(row["id"]),
+            name=row["name"],
+            anzahl_monate=int(row["anzahl_monate"]),
+            anzahl_kurse=int(row["anzahl_kurse"]),
+            ects_gesamt=int(row["ects_gesamt"]),
+        )
+    
+    def all(self):
+        with self._provider.connect() as conn:
+            rows = conn.execute(
+                "SELECT id, name, anzahl_monate, anzahl_kurse, ects_gesamt FROM studiengang ORDER BY id"
+            ).fetchall()
+        return [self._row_to_model(r) for r in rows]
+        
+    @staticmethod
+    def _row_to_model(row) -> Studiengang:
+        """KRITISCH: ID muss korrekt gemappt werden!"""
+        return Studiengang(
+            id=int(row["id"]),  
             name=row["name"],
             anzahl_monate=int(row["anzahl_monate"]),
             anzahl_kurse=int(row["anzahl_kurse"]),

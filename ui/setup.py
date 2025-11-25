@@ -32,3 +32,5 @@ def build_service(db_path: str = "studium.db") -> tuple[FortschrittService, Stud
         studiengang_repo=studiengang_repo,
     )
     return service, student_repo
+
+    

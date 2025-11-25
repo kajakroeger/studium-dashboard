@@ -1,15 +1,15 @@
 # db/repositories/sqlite_pruefung_repository.py
 """
-SQLite-Skelett für PruefungRepository.
+SQLite-Implementierung für PruefungRepository.
 Beachtet Enum-Konvertierung für Pruefungsform und bool/ints.
 """
 
 from __future__ import annotations
+
 from typing import Optional
 
 from db import ConnectionProvider
 from models.pruefung import Pruefung, Pruefungsform
-from models.bearbeitung import StatusBearbeitung
 from .pruefung_repository import PruefungRepository
 
 
@@ -18,7 +18,7 @@ class SQLitePruefungRepository(PruefungRepository):
         self._provider = provider
         self._ensure_table()
 
-    # legt Datenbanktabelle an, falls sie noch nicht existiert
+    # Tabelle anlegen, falls noch nicht vorhanden
     def _ensure_table(self) -> None:
         sql = """
         CREATE TABLE IF NOT EXISTS pruefung (
@@ -35,91 +35,137 @@ class SQLitePruefungRepository(PruefungRepository):
             conn.execute(sql)
             conn.commit()
 
-
+    # ------------------------------------------------------------------ #
     # Public API
+    # ------------------------------------------------------------------ #
+
     def get_by_id(self, pruefung_id: int) -> Optional[Pruefung]:
         with self._provider.connect() as conn:
             row = conn.execute(
-                "SELECT id, bearbeitung_id, pruefungsform, note, versuch_nr, bestanden, letzter_versuch "
-                "FROM pruefung WHERE id=?",
+                """
+                SELECT id, bearbeitung_id, pruefungsform,
+                       note, versuch_nr, bestanden, letzter_versuch
+                FROM pruefung
+                WHERE id = ?
+                """,
                 (pruefung_id,),
             ).fetchone()
         return None if row is None else self._row_to_model(row)
-    
 
     def get_by_bearbeitung_id(self, bearbeitung_id: int) -> Optional[Pruefung]:
+        """Liefert die (aktuelle) Prüfung zu einer Bearbeitung, falls vorhanden."""
         with self._provider.connect() as conn:
             row = conn.execute(
-                "SELECT id, bearbeitung_id, pruefungsform, note, versuch_nr, bestanden, letzter_versuch "
-                "FROM pruefung WHERE bearbeitung_id = ? LIMIT 1",
+                """
+                SELECT id, bearbeitung_id, pruefungsform,
+                       note, versuch_nr, bestanden, letzter_versuch
+                FROM pruefung
+                WHERE bearbeitung_id = ?
+                ORDER BY versuch_nr DESC
+                LIMIT 1
+                """,
                 (bearbeitung_id,),
             ).fetchone()
         return None if row is None else self._row_to_model(row)
 
-
     def create(self, p: Pruefung) -> int:
+        # bearbeitung_id muss gesetzt sein
+        if getattr(p, "bearbeitung_id", None) is None:
+            raise ValueError("Pruefung.create: bearbeitung_id fehlt")
+
+        form = getattr(p.pruefungsform, "value", p.pruefungsform)
+
+        bestanden_db = (
+            None
+            if getattr(p, "bestanden", None) is None
+            else (1 if p.bestanden else 0)
+        )
+        letzter = 1 if getattr(p, "letzter_versuch", False) else 0
+        versuch = int(getattr(p, "versuch_nr", 1) or 1)
+
         with self._provider.connect() as conn:
             cur = conn.execute(
-                "INSERT INTO pruefung (bearbeitung_id, pruefungsform, note, versuch_nr, bestanden, letzter_versuch) "
-                "VALUES (?,?,?,?,?,?)",
+                """
+                INSERT INTO pruefung (
+                    bearbeitung_id,
+                    pruefungsform,
+                    note,
+                    versuch_nr,
+                    bestanden,
+                    letzter_versuch
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
                 (
-                    p.bearbeitung.id,
-                    p.pruefungsform.value,
+                    int(p.bearbeitung_id),
+                    form,
                     p.note,
-                    p.versuch_nr,
-                    None if p.bestanden is None else int(p.bestanden),
-                    int(p.letzter_versuch),
+                    versuch,
+                    bestanden_db,
+                    letzter,
                 ),
             )
             conn.commit()
-            new_id = int(cur.lastrowid)  # type: ignore[arg-type]
-        p.id = new_id
-        return new_id
-
+            p.id = int(cur.lastrowid)
+            return p.id
 
     def update(self, p: Pruefung) -> None:
+        if p.id is None:
+            raise ValueError("Pruefung.update: id fehlt")
+
+        form = getattr(p.pruefungsform, "value", p.pruefungsform)
+        bestanden_db = (
+            None
+            if getattr(p, "bestanden", None) is None
+            else (1 if p.bestanden else 0)
+        )
+        letzter = 1 if getattr(p, "letzter_versuch", False) else 0
+        versuch = int(getattr(p, "versuch_nr", 1) or 1)
+
         with self._provider.connect() as conn:
             conn.execute(
-                "UPDATE pruefung SET bearbeitung_id=?, pruefungsform=?, note=?, versuch_nr=?, bestanden=?, letzter_versuch=? "
-                "WHERE id=?",
+                """
+                UPDATE pruefung
+                SET bearbeitung_id = ?,
+                    pruefungsform  = ?,
+                    note           = ?,
+                    versuch_nr     = ?,
+                    bestanden      = ?,
+                    letzter_versuch= ?
+                WHERE id = ?
+                """,
                 (
-                    p.bearbeitung.id,
-                    p.pruefungsform.value,
+                    int(p.bearbeitung_id),
+                    form,
                     p.note,
-                    p.versuch_nr,
-                    None if p.bestanden is None else int(p.bestanden),
-                    int(p.letzter_versuch),
-                    p.id,
+                    versuch,
+                    bestanden_db,
+                    letzter,
+                    int(p.id),
                 ),
             )
             conn.commit()
-
 
     def delete(self, pruefung_id: int) -> None:
         with self._provider.connect() as conn:
-            conn.execute("DELETE FROM pruefung WHERE id=?", (pruefung_id,))
+            conn.execute("DELETE FROM pruefung WHERE id = ?", (pruefung_id,))
             conn.commit()
 
-    # Mapping: Achtung – hier bräuchtest du die Bearbeitung (Objekt).
-    # Vereinfachung: Wir setzen bearbeitung=None und laden sie im Service nach,
-    # oder du gibst hier ein BearbeitungRepository rein. Fürs Grundgerüst setzen wir None.
+    # ------------------------------------------------------------------ #
+    # Row → Model
+    # ------------------------------------------------------------------ #
     @staticmethod
     def _row_to_model(row) -> Pruefung:
-        # Bearbeitung-Objekt wird später im Service aufgelöst (Lazy).
-        from models.bearbeitung import Bearbeitung  # vermeiden von Zyklus im Kopf
-        dummy_bearbeitung = Bearbeitung(
-            id=row["bearbeitung_id"],
-            kurs_id=-1,
-            student_id=-1,
-            start_datum=None,  # type: ignore[arg-type]
-            status=StatusBearbeitung.INAKTIV,
-        )
         return Pruefung(
-            id=row["id"],
-            bearbeitung=dummy_bearbeitung,
+            id=int(row["id"]),
+            bearbeitung_id=int(row["bearbeitung_id"]),
             pruefungsform=Pruefungsform(row["pruefungsform"]),
             note=row["note"],
-            versuch_nr=row["versuch_nr"],
-            bestanden=None if row["bestanden"] is None else bool(row["bestanden"]),
+            versuch_nr=int(row["versuch_nr"]),
+            bestanden=(
+                bool(row["bestanden"])
+                if row["bestanden"] is not None
+                else False
+            ),
             letzter_versuch=bool(row["letzter_versuch"]),
         )

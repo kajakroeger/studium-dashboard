@@ -3,19 +3,25 @@ core/__init__.py
 Dieses Paket bündelt die fachliche Logik (Application/Services).
 Nach außen exportieren wir den FortschrittService und seine DTOs.
 """
-
 from __future__ import annotations
 
-# Importiere DTOs, die du im UI brauchst (z. B. für KPI- oder Zielanzeigen)
-from .dtos import StudienzieleDTO, ZielStatusDTO, KursFortschrittDTO, BearbeitungFortschrittDTO, GesamtFortschrittDTO
+# DTOs für die UI
+from .dtos import (
+    StudienzieleDTO,
+    ZielStatusDTO,
+    KursFortschrittDTO,
+    BearbeitungFortschrittDTO,
+    GesamtFortschrittDTO,
+)
 
-# Importiere den neuen zusammengesetzten FortschrittService
+# Sub-Services
 from .progress_service import ProgressService
 from .goals_service import GoalsService
 from .workflow_service import WorkflowService
 
+
 # --------------------------------------------------------
-# Fassade, die alles zusammenhält 
+# Fassade: öffentliche API für die UI
 # --------------------------------------------------------
 class FortschrittService:
     def __init__(
@@ -27,36 +33,18 @@ class FortschrittService:
         pruefung_repo,
         einschreibung_repo,
         studiengang_repo,
-    ):
-        # Speichert Repositories für spätere Nutzung
-        self._kurs_repo = kurs_repo         
-        self._student_repo = student_repo
-        self._bearbeitung_repo = bearbeitung_repo
-        self._pruefung_repo = pruefung_repo
-        self._einschreibung_repo = einschreibung_repo
-        self._studiengang_repo = studiengang_repo
-
-        self._kurs_repository = kurs_repo  
-
-
-        # Sub-Services instanzieren
+    ) -> None:
+        # Sub-Services instanzieren (Repos werden NUR hier verdrahtet)
         self._progress = ProgressService(
             student_repo=student_repo,
             bearbeitung_repo=bearbeitung_repo,
             kurs_repo=kurs_repo,
             pruefung_repo=pruefung_repo,
             einschreibung_repo=einschreibung_repo,
+            # workflow=workflow,
         )
-
-        self._goals = GoalsService(
-            bearbeitung_repo=bearbeitung_repo,
-            kurs_repo=kurs_repo,
-            pruefung_repo=pruefung_repo,
-            einschreibung_repo=einschreibung_repo,
-            notenschnitt_fn=self._progress.berechne_notenschnitt,
-        )
-
-        self._workflow = WorkflowService(
+ 
+        workflow = WorkflowService(
             student_repo=student_repo,
             bearbeitung_repo=bearbeitung_repo,
             kurs_repo=kurs_repo,
@@ -66,33 +54,86 @@ class FortschrittService:
             ects_summe_bestanden_fn=self._progress.ects_summe_bestanden,
             notenschnitt_fn=self._progress.berechne_notenschnitt,
         )
+        self._workflow = workflow
+        self._progress.set_workflow(workflow)
 
-    # --------------------------------------------------------
-    # Delegationen (Public API beibehalten)
-    # --------------------------------------------------------
+        self._goals = GoalsService(
+            bearbeitung_repo=bearbeitung_repo,
+            kurs_repo=kurs_repo,
+            pruefung_repo=pruefung_repo,
+            einschreibung_repo=einschreibung_repo,
+            notenschnitt_fn=self._progress.berechne_notenschnitt,
+        )
 
+
+
+
+
+    # ---------------- CRUD/Workflows (Delegationen) ------------
+    # ---------------- Student ------------
     def create_student(self, **kwargs) -> int:
         return self._workflow.create_student(**kwargs)
+    
+    def student_by_id(self, student_id: int):
+        return self._workflow.student_by_id(student_id)
+    
+    def student_all(self):
+        return self._workflow.student_all()
+    
 
-    # KPI-/Fortschrittsfunktionen
-    def berechne_notenschnitt(self, student_id: int):
-        return self._progress.berechne_notenschnitt(student_id)
 
-    def ects_summe_bestanden(self, student_id: int):
-        return self._progress.ects_summe_bestanden(student_id)
+    # ---------------- Studiengang ------------
+    def studiengang_by_id(self, studiengang_id: int):
+        return self._workflow.studiengang_by_id(studiengang_id)
+    
+    def studiengang_by_name(self, name: str):
+        return self._workflow.studiengang_by_name(name)
+    
+    def studiengaenge_fuer_student(self, student_id: int):
+        return self._workflow.studiengaenge_fuer_student(student_id)
+    
+    def studiengang_all(self):
+        return self._workflow.studiengang_all()
+    
 
-    # Falls vorhanden:
-    def gesamtuebersicht(self, student_id: int):
-        return self._progress.gesamtuebersicht(student_id)
 
-    # Ziel- und Prognosefunktionen
-    def hole_studienziele(self, student_id: int) -> StudienzieleDTO:
-        return self._goals.hole_studienziele(student_id)
+    # ---------------- Einschreibungen ----------------
+    def einschreibungen_fuer_student(self, student_id: int):
+        return self._workflow.einschreibungen_fuer_student(student_id)
+    
+    def aktive_einschreibung(self, student_id: int):
+        return self._workflow.aktive_einschreibung(student_id)
+    
 
-    def berechne_ziel_status(self, student_id: int) -> ZielStatusDTO:
-        return self._goals.berechne_ziel_status(student_id)
 
-    # Workflows
+    # ---------------- Kurse ----------------
+    def kurse_all(self):
+        return self._workflow.kurse_all()
+
+    def kurs_by_id(self, kurs_id: int):
+        return self._workflow.kurs_by_id(kurs_id)
+
+    def kurs_name_exists(self, name: str) -> bool:
+        return self._workflow.kurs_name_exists(name)
+
+    def kurs_kuerzel_exists(self, kz: str) -> bool:
+        return self._workflow.kurs_kuerzel_exists(kz)
+    
+    def kurse_fuer_pruefungsabgabe(self, student_id: int, studiengang_id: int | None = None):
+        return self._workflow.kurse_fuer_pruefungsabgabe(student_id, studiengang_id)
+    
+
+    
+    # ---------------- Bearbeitungen der Kurse ----------------
+    def bearbeitungen_fuer_student(self, student_id: int):
+        return self._workflow.bearbeitungen_fuer_student(student_id)
+
+    def pruefungen_fuer_student(self, student_id: int):
+        return self._workflow.pruefungen_fuer_student(student_id)
+    
+
+
+    # ---------------- Action Bar Acktionen ------------
     def add_kurs_mit_bearbeitung_und_pruefung(self, **kwargs):
         return self._workflow.add_kurs_mit_bearbeitung_und_pruefung(**kwargs)
 
@@ -105,56 +146,38 @@ class FortschrittService:
     def studium_abschliessen(self, **kwargs):
         return self._workflow.studium_abschliessen(**kwargs)
     
-    def kurs_name_exists(self, name: str) -> bool:
-        return self._kurs_repo.exists_by_name((name or "").strip())
 
-    def kurs_kuerzel_exists(self, kz: str) -> bool:
-        return self._kurs_repo.exists_by_kuerzel((kz or "").strip())
+
+    # ---------------- KPIs / Fortschritt ------------
+    def hole_studienziele(self, student_id: int) -> StudienzieleDTO:
+        return self._goals.hole_studienziele(student_id)
+    
+    def ziel_ects(self, student_id: int, studiengang_id: int | None = None) -> int:
+        return self._workflow.ziel_ects(student_id, studiengang_id)
+    
+    def berechne_ziel_status(self, student_id: int) -> ZielStatusDTO:
+        return self._goals.berechne_ziel_status(student_id)
+
+    def berechne_notenschnitt(self, student_id: int):
+        return self._progress.berechne_notenschnitt(student_id)
+
+    def ects_summe_bestanden(self, student_id: int):
+        return self._progress.ects_summe_bestanden(student_id)
+
+    def gesamtuebersicht(self, student_id: int):
+        return self._progress.gesamtuebersicht(student_id)
+    
+    def berechne_bearbeitungszeit(self, student_id: int) -> int:
+        return self._progress.berechne_bearbeitungszeit(student_id)
+    
+    def bearbeitungsdauer_in_tagen(self, student_id: int):
+        return self._progress.bearbeitungsdauer_in_tagen(student_id)
+    
+    def verlauf_bearbeitungszeiten(self, student_id: int):
+        return self._progress.verlauf_bearbeitungszeiten(student_id)
     
 
-    # Für die UI: Kurse, deren Bearbeitung aktiv ist und NICHT eingereicht
-    def kurse_fuer_pruefungsabgabe(self, student_id: int):
-        """
-        Liefert Kurs-Objekte für selectbox:
-        - Bearbeitungsstatus in {'aktiv','in_bearbeitung'} (passe an deine Enum/Strings an)
-        - nicht 'pruefung_eingereicht', nicht 'abgeschlossen'
-        """
-        # minimal generisch via Bearbeitungen → Kurs joinen
-        items = []
-        get_bearb = getattr(self._bearbeitung_repo, "list_by_student", None)
-        if callable(get_bearb):
-            for b in self._bearbeitung_repo.list_by_student(student_id):
-                status = str(getattr(b, "status", "")).lower()
-                if status in {"aktiv", "in_bearbeitung"}:
-                    k = self._kurs_repo.get(getattr(b, "kurs_id", None))
-                    if k is not None:
-                        items.append(k)
-        else:
-            # Fallback: direkt aus Kurs-Repo, wenn du dort eine Methode hast
-            get_kurse = getattr(self._kurs_repo, "list_aktiv_ohne_einreichung", None)
-            if callable(get_kurse):
-                items = list(self._kurs_repo.list_aktiv_ohne_einreichung(student_id))
-        return items
-    
-    # core/__init__.py – in class FortschrittService
-    def ziel_ects(self, student_id: int) -> int:
-        """ECTS-Ziel aus dem Studiengang der aktiven Einschreibung."""
-        e = getattr(self._einschreibung_repo, "get_aktive_fuer_student", lambda _sid: None)(student_id)
-        if e and getattr(e, "studiengang_id", None) is not None:
-            sg = self._studiengang_repo.get(e.studiengang_id)
-            return int(
-                getattr(sg, "ects_gesamt", None)
-                or getattr(sg, "ziel_ects", None)
-                or getattr(sg, "ects_total", None)
-                or 180
-            )
-        return 180
 
-    
-
-# --------------------------------------------------------
-# Öffentliche Exporte für andere Module
-# --------------------------------------------------------
 __all__ = [
     "FortschrittService",
     "StudienzieleDTO",

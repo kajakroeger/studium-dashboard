@@ -33,10 +33,20 @@ class Bearbeitung:
     id: Optional[int] = None                # Primärschlüssel, wird von der DB gesetzt
 
 
+    def kann_eingereicht_werden(self) -> bool:
+        """Prüft, ob diese Bearbeitung eingereicht werden kann."""
+        return self.status == StatusBearbeitung.AKTIV and self.abgabe_datum is None
+
     def bearbeitung_abgeben(self, abgabe_datum: date):
-        """Setzt das Abgabedatum und ändert den Status auf 'abgeschlossen'."""
+        """Reicht die Bearbeitung ein (setzt Datum und ändert Status)."""
+        if not self.kann_eingereicht_werden():
+            raise ValueError(
+                f"Bearbeitung kann nicht eingereicht werden (Status: {self.status.value}, "
+                f"Abgabe: {self.abgabe_datum})"
+            )
+        
         self.abgabe_datum = abgabe_datum
-        self.status = StatusBearbeitung.ABGESCHLOSSEN
+        self.status = StatusBearbeitung.PRUEFUNG_EINGEREICHT
 
     def ist_abgeschlossen(self) -> bool:
         """Gibt True zurück, wenn die Bearbeitung abgeschlossen ist (d. h. Abgabedatum vorhanden)."""
