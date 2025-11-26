@@ -4,6 +4,7 @@ Dieses Paket bündelt die fachliche Logik (Application/Services).
 Nach außen exportieren wir den FortschrittService und seine DTOs.
 """
 from __future__ import annotations
+from datetime import date
 
 # DTOs für die UI
 from .dtos import (
@@ -136,12 +137,18 @@ class FortschrittService:
     # ---------------- Action Bar Acktionen ------------
     def add_kurs_mit_bearbeitung_und_pruefung(self, **kwargs):
         return self._workflow.add_kurs_mit_bearbeitung_und_pruefung(**kwargs)
+    
+    def bearbeitung_starten(self, bearbeitung_id: int, start_datum: date) -> None:
+        return self._workflow.bearbeitung_starten(bearbeitung_id=bearbeitung_id, start_datum=start_datum)
 
     def pruefung_abgeben(self, **kwargs):
         return self._workflow.pruefung_abgeben(**kwargs)
 
     def note_fuer_kurs_eintragen(self, **kwargs):
         return self._workflow.note_fuer_kurs_eintragen(**kwargs)
+    
+    def offene_kurse_fuer_bewertung(self, student_id: int):
+        return self._workflow.offene_kurse_fuer_bewertung(student_id)
 
     def studium_abschliessen(self, **kwargs):
         return self._workflow.studium_abschliessen(**kwargs)

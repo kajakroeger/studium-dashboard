@@ -134,6 +134,34 @@ class SQLiteBearbeitungRepository(BearbeitungRepository):
             conn.execute("DELETE FROM bearbeitung WHERE id = ?", (bearbeitung_id,))
             conn.commit()
 
+
+    def fuer_student_und_kurs_mit_abgabe(
+        self,
+        student_id: int,
+        kurs_id: int,
+    ) -> Optional[Bearbeitung]:
+        """
+        Liefert die Bearbeitung eines Studenten für einen Kurs,
+        die bereits ein Abgabedatum hat (die neueste, falls mehrere existieren).
+        Wird z.B. beim Note-Eintragen verwendet.
+        """
+        with self._provider.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT id, student_id, kurs_id, status, plan_start, plan_end,
+                       start_datum, abgabe_datum
+                FROM bearbeitung
+                WHERE student_id = ?
+                  AND kurs_id = ?
+                  AND abgabe_datum IS NOT NULL
+                ORDER BY abgabe_datum DESC, id DESC
+                LIMIT 1
+                """,
+                (student_id, kurs_id),
+            ).fetchone()
+
+        return self._row_to_model(row) if row else None
+
     # ------------------- Mapping -------------------
 
     @staticmethod

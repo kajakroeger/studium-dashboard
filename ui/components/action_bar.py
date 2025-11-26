@@ -83,20 +83,97 @@ def add_kurs_dialog(service: FortschrittService, student_id: Optional[int]):
             st.error(f"❌ Speichern fehlgeschlagen: {ex}")
 
 
-# ui/components/action_bar.py - verbesserte Version:
+
+
+@st.dialog("Kurs starten")
+def start_kurs_dialog(service: FortschrittService, current_student_id: Optional[int]):
+    """
+    Dialog zum Starten eines Kurses.
+    Es werden nur Bearbeitungen ohne start_datum und nicht 'abgeschlossen' angezeigt.
+    """
+    st.caption("▶ Kursbearbeitung starten")
+
+    if not current_student_id:
+        st.error("Bitte zuerst einen Studenten auswählen/anlegen.")
+        return
+
+    # Bearbeitungen für den Studenten laden
+    try:
+        bearbeitungen = service.bearbeitungen_fuer_student(current_student_id) or []
+    except Exception as ex:
+        st.error(f"Fehler beim Laden der Bearbeitungen: {ex}")
+        return
+
+    # Kandidaten zum Starten filtern
+    startbare_items = []
+    for b in bearbeitungen:
+        status_raw = getattr(b, "status", "")
+        status_text = getattr(status_raw, "value", status_raw)
+        status_text = str(status_text).strip().lower()
+
+        start_datum = getattr(b, "start_datum", None)
+        abgabe_datum = getattr(b, "abgabe_datum", None)
+
+        # Nur Bearbeitungen ohne Startdatum und nicht abgeschlossen
+        if start_datum is None and status_text != "abgeschlossen":
+            kurs = service.kurs_by_id(getattr(b, "kurs_id", None))
+            if kurs:
+                label = f"{getattr(kurs, 'kurs_kuerzel', '') or kurs.name}"
+                startbare_items.append((b, kurs, label))
+
+    if not startbare_items:
+        st.info("Es gibt derzeit keine Kurse, die gestartet werden können.")
+        st.caption("💡 Füge einen Kurs hinzu oder trage erst die Planung ein.")
+        return
+
+    # Selectbox vorbereiten
+    labels = [lbl for _, _, lbl in startbare_items]
+    idx = st.selectbox(
+        "**Kurs auswählen***",
+        list(range(len(labels))),
+        format_func=lambda i: labels[i],
+        key="start_kurs_idx",
+    )
+    bearbeitung, kurs, _ = startbare_items[idx]
+
+    start_datum = st.date_input(
+        "**Startdatum***",
+        value=date.today(),
+        key="start_kurs_startdatum",
+    )
+
+    st.divider()
+    c1, c2 = st.columns(2)
+
+    if c1.button("❌ Abbrechen", use_container_width=True):
+        st.rerun()
+
+    if c2.button("▶ Kurs starten", type="primary", use_container_width=True):
+        try:
+            # hier rufen wir eine Service-Methode auf (siehe unten)
+            service.bearbeitung_starten(
+                bearbeitung_id=getattr(bearbeitung, "id", None),
+                start_datum=start_datum,
+            )
+            st.session_state["start_kurs__just_saved"] = True
+            st.rerun()
+        except Exception as ex:
+            st.error(f"❌ Fehler beim Starten des Kurses: {ex}")
+
+
 
 @st.dialog("Prüfung abgeben")
-def submit_pruefung_dialog(service: FortschrittService, current_student_id: Optional[int]):
+def submit_pruefung_dialog(service: FortschrittService, student_id: Optional[int]):
     """Dialog zum Abgeben einer Prüfung."""
     st.caption("📝 Kurs wählen und Abgabedatum setzen")
     
-    if not current_student_id:
+    if not student_id:
         st.error("Bitte zuerst einen Studenten auswählen/anlegen.")
         return
     
     # Kurse laden, die aktiv sind & noch nicht eingereicht
     try:
-        kurse = service.kurse_fuer_pruefungsabgabe(current_student_id)
+        kurse = service.kurse_fuer_pruefungsabgabe(student_id)
     except Exception as ex:
         st.error(f"Fehler beim Laden der Kurse: {ex}")
         return
@@ -136,7 +213,7 @@ def submit_pruefung_dialog(service: FortschrittService, current_student_id: Opti
     if col_save.button("📤 Abgeben", type="primary", use_container_width=True):
         try:
             service.pruefung_abgeben(
-                student_id=current_student_id,
+                student_id=student_id,
                 kurs_id=int(kurs_id),
                 abgabe_datum=abgabe,
             )
@@ -148,47 +225,80 @@ def submit_pruefung_dialog(service: FortschrittService, current_student_id: Opti
 
 @st.dialog("Bewertung eintragen")
 def add_bewertung_dialog(service: FortschrittService, current_student_id: Optional[int]):
-    """Dialog zum Eintragen einer Bewertung."""
-    st.caption("⭐ Note für abgegebenen Kurs eintragen")
-    
-    kurs_id = st.number_input("**Kurs-ID***", min_value=1, step=1, key="dialog_grade_kurs_id")
-    note = st.number_input(
-        "**Note*** (1.0 - 5.0)", 
-        min_value=1.0, 
-        max_value=5.0, 
-        step=0.1, 
-        value=1.0,
-        format="%.1f", 
-        key="dialog_grade_note"
+    st.caption("⭐ Note für eingereichte Prüfungen eintragen")
+
+    if not current_student_id:
+        st.error("Bitte zuerst einen Studenten auswählen/anlegen.")
+        return
+
+    try:
+        offene = service.offene_kurse_fuer_bewertung(current_student_id)
+    except Exception as ex:
+        st.error(f"Fehler beim Laden der offenen Bewertungen: {ex}")
+        return
+
+    if not offene:
+        st.info(
+            "Aktuell gibt es keine Bearbeitungen mit Status 'Prüfung eingereicht', "
+            "die bewertet werden können."
+        )
+        return
+
+    # Labels bauen
+    labels = []
+    for b, kurs, pruefung in offene:
+        abgabe_str = b.abgabe_datum.strftime("%d.%m.%Y") if b.abgabe_datum else "kein Datum"
+        if pruefung is None:
+            status_txt = "noch keine Note"
+        else:
+            status_txt = f"bisherige Note: {pruefung.note}"
+
+        labels.append(
+            f"{kurs.kurs_kuerzel or kurs.name} – Abgabe: {abgabe_str} – {status_txt}"
+        )
+
+    idx = st.selectbox(
+        "**Kurs / Bearbeitung***",
+        options=list(range(len(offene))),
+        format_func=lambda i: labels[i],
+        key="dialog_grade_bearbeitung_idx",
     )
-    
-    st.info("💡 **Hinweis:** 1.0 = sehr gut, 5.0 = nicht bestanden")
+
+    bearb, kurs, _ = offene[idx]
+
+    note = st.number_input(
+        "**Note*** (1.0 - 5.0)",
+        min_value=1.0,
+        max_value=5.0,
+        step=0.1,
+        value=1.0,
+        format="%.1f",
+        key="dialog_grade_note",
+    )
+
+    st.info("💡 1.0 = sehr gut, 5.0 = nicht bestanden")
 
     st.divider()
-    col_cancel, col_save = st.columns([1, 1])
-    
-    if col_cancel.button("❌ Abbrechen", use_container_width=True):
+    c1, c2 = st.columns(2)
+    if c1.button("❌ Abbrechen", use_container_width=True):
         st.rerun()
-    
-    if col_save.button("💾 Speichern", type="primary", use_container_width=True):
-        if not current_student_id:
-            st.error("Bitte zuerst einen Studenten auswählen/anlegen.")
-            return
-        
+
+    if c2.button("💾 Speichern", type="primary", use_container_width=True):
         try:
             p = service.note_fuer_kurs_eintragen(
                 student_id=current_student_id,
-                kurs_id=int(kurs_id),
+                kurs_id=kurs.id,
                 note=float(note),
             )
             st.session_state["add_bewertung__just_saved"] = True
             st.session_state["last_pruefung_info"] = {
-                "versuch_nr": p.versuch_nr,
-                "bestanden": p.bestanden
+                "versuch_nr": getattr(p, "versuch_nr", None),
+                "bestanden": getattr(p, "bestanden", None),
             }
             st.rerun()
         except Exception as ex:
             st.error(f"❌ Fehler beim Speichern: {ex}")
+
 
 
 @st.dialog("Studium abschließen")
@@ -196,33 +306,57 @@ def finish_studium_dialog(service: FortschrittService, current_student_id: Optio
     """Dialog zum Abschließen des Studiums."""
     st.caption("🎓 Abschluss prüfen und Studium beenden")
     st.warning("⚠️ Voraussetzungen: ECTS erreicht + Abschlussprüfung bestanden")
-    
-    ects_required = st.number_input(
-        "Erforderliche ECTS (optional)", 
-        min_value=0, 
-        max_value=360, 
-        step=5, 
-        value=180,
-        key="dialog_finish_ects_req"
-    )
-    
-    st.info("💡 Lasse das Feld bei 0, wenn keine Mindest-ECTS geprüft werden sollen.")
+
+    if not current_student_id:
+        st.error("Bitte zuerst einen Studenten auswählen/anlegen.")
+        return
+
+    # --- Studiengang laden (ECTS-Ziel) ---
+    try:
+        studiengaenge = service.studiengaenge_fuer_student(current_student_id) or []
+        ziel_ects = studiengaenge[0].ects_gesamt if studiengaenge else None
+    except Exception:
+        ziel_ects = None
+
+    # --- Bestanden-ECTS laden ---
+    try:
+        ects_bestanden = float(service.ects_summe_bestanden(current_student_id) or 0.0)
+    except Exception:
+        ects_bestanden = 0.0
+
+    # --- Bedingungen prüfen ---
+    hat_ects_ziel = ziel_ects is not None
+    genug_ects = ects_bestanden >= ziel_ects if hat_ects_ziel else False
+
+    # --- Fortschritt anzeigen ---
+    if hat_ects_ziel:
+        st.info(f"📚 **ECTS-Fortschritt:** {ects_bestanden:.0f} / {ziel_ects} ECTS")
+        if not genug_ects:
+            st.error("❌ Ziel-ECTS noch nicht erreicht.")
+    else:
+        st.error("❌ Kein Studiengang gefunden. Bitte zuerst einen Studiengang vergeben.")
+        return
 
     st.divider()
+
     col_cancel, col_save = st.columns([1, 1])
-    
+
     if col_cancel.button("❌ Abbrechen", use_container_width=True):
         st.rerun()
-    
-    if col_save.button("✅ Prüfen & Abschließen", type="primary", use_container_width=True):
-        if not current_student_id:
-            st.error("Bitte zuerst einen Studenten auswählen/anlegen.")
-            return
-        
+
+    # Button deaktivieren bis Bedingungen erfüllt sind
+    disabled = not genug_ects
+
+    if col_save.button(
+        "✅ Prüfen & Abschließen",
+        type="primary",
+        use_container_width=True,
+        disabled=disabled
+    ):
         try:
             ok = service.studium_abschliessen(
                 student_id=current_student_id,
-                erforderliche_ects=int(ects_required) if ects_required > 0 else None,
+                erforderliche_ects=ziel_ects,
             )
             if ok:
                 st.session_state["finish_studium__success"] = True
@@ -238,7 +372,7 @@ def settings_dialog(current_student_id: Optional[int]):
     """Dialog für Einstellungen."""
     st.caption("⚙️ Anwendungseinstellungen")
     
-    st.info("Hier kannst du später Einstellungen vornehmen:")
+    st.info("Hier kannst du demnächst Einstellungen vornehmen, wie")
     st.markdown("""
     - 🌙 Dark Mode umschalten
     - 👤 Namen ändern
@@ -265,17 +399,21 @@ def render_action_bar(
     students: StudentRepository,
     current_student_id: Optional[int],
 ) -> None:
-    """Eine Zeile, 5 Spalten – jeder Button öffnet einen eigenen Dialog."""
+    """Eine Zeile von Buttons – jeder Button öffnet einen eigenen Dialog."""
     
     # Toast-Nachrichten für erfolgreiche Aktionen
     if st.session_state.get("add_kurs__just_saved", False):
         st.session_state["add_kurs__just_saved"] = False
         st.toast("✅ Kurs erfolgreich gespeichert!")
+
+    if st.session_state.get("start_kurs__just_saved", False):
+        st.session_state["start_kurs__just_saved"] = False
+        st.toast("▶ Kursbearbeitung gestartet!")
     
     if st.session_state.get("submit_pruefung__just_saved", False):
         st.session_state["submit_pruefung__just_saved"] = False
         st.toast("✅ Prüfung erfolgreich abgegeben!")
-    
+
     if st.session_state.get("add_bewertung__just_saved", False):
         st.session_state["add_bewertung__just_saved"] = False
         info = st.session_state.get("last_pruefung_info", {})
@@ -289,32 +427,41 @@ def render_action_bar(
         st.toast("🎉 Glückwunsch! Studium erfolgreich abgeschlossen!")
     
     # Button-Leiste
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
 
     with col1:
         if st.button("➕ Kurs hinzufügen", use_container_width=True, key="open_add_kurs"):
             st.session_state["show_add_kurs_dialog"] = True
-    
+
     with col2:
+        if st.button("▶ Kurs starten", use_container_width=True, key="open_start_kurs"):
+            st.session_state["show_start_kurs_dialog"] = True
+    
+    with col3:
         if st.button("📝 Prüfung abgeben", use_container_width=True, key="open_submit_pruefung"):
             st.session_state["show_submit_pruefung_dialog"] = True
     
-    with col3:
+    with col4:
         if st.button("⭐ Bewertung eintragen", use_container_width=True, key="open_add_bewertung"):
             st.session_state["show_add_bewertung_dialog"] = True
     
-    with col4:
+    with col5:
         if st.button("🎓 Studium abschließen", use_container_width=True, key="open_finish_studium"):
             st.session_state["show_finish_studium_dialog"] = True
     
-    with col5:
+    with col6:
         if st.button("⚙️ Einstellungen", use_container_width=True, key="open_settings"):
             st.session_state["show_settings_dialog"] = True
 
-    # Dialoge aufrufen, wenn entsprechende Flags gesetzt sind
+
+    # Dialoge aufrufen
     if st.session_state.get("show_add_kurs_dialog", False):
         st.session_state["show_add_kurs_dialog"] = False
         add_kurs_dialog(service, current_student_id)
+
+    if st.session_state.get("show_start_kurs_dialog", False):
+        st.session_state["show_start_kurs_dialog"] = False
+        start_kurs_dialog(service, current_student_id)
     
     if st.session_state.get("show_submit_pruefung_dialog", False):
         st.session_state["show_submit_pruefung_dialog"] = False

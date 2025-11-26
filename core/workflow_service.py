@@ -1,7 +1,7 @@
 # core/workflow_service.py
 from __future__ import annotations
 from datetime import date
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 from models.student import Student
 from models.bearbeitung import Bearbeitung, StatusBearbeitung
@@ -196,17 +196,18 @@ class WorkflowService:
 
 
     def kurse_fuer_pruefungsabgabe(
-        self,
-        student_id: int,
-        studiengang_id: Optional[int] = None,
-        debug: bool = False,
-    ) -> List[Kurs]:
+            self,
+            student_id: int,
+            studiengang_id: Optional[int] = None,
+            debug: bool = False,
+        ) -> List[Kurs]:
         """
         Liefert alle Kurse, für die der Student aktuell eine Prüfung abgeben kann.
-        Basis:
-        - Bearbeitungen des Studenten
-        - status aus Bearbeitung (Text)
-        - abgabe_datum aus Bearbeitung
+
+        Regeln:
+        - Bearbeitung gehört zum Studenten (+ optional Studiengang)
+        - Status 'aktiv' (Enum oder String)
+        - noch KEIN Abgabedatum
         """
 
         # 1) Bearbeitungen & Kurse über den Service holen
@@ -217,21 +218,27 @@ class WorkflowService:
         debug_rows = []
 
         for b in bearb_list:
+            # Status robust in Text umwandeln (Enum ODER String)
             status_raw = getattr(b, "status", "")
-            status_txt = str(status_raw).strip().lower()
-            abgabe = getattr(b, "abgabe_datum", None)
+            status_val = getattr(status_raw, "value", status_raw)   # <- wichtig für Enum
+            status_txt = str(status_val).strip().lower()
+
+            # Abgabedatum robust behandeln (kann None, "", str oder date sein)
+            abgabe_raw = getattr(b, "abgabe_datum", None)
+            abgabe = self._to_date(abgabe_raw) if hasattr(self, "_to_date") else abgabe_raw
 
             row = {
-                "bearbeitung_id": b.id,
-                "kurs_id": b.kurs_id,
+                "bearbeitung_id": getattr(b, "id", None),
+                "kurs_id": getattr(b, "kurs_id", None),
                 "status_raw": status_raw,
                 "status_norm": status_txt,
-                "abgabe_datum": abgabe,
+                "abgabe_datum_raw": abgabe_raw,
+                "abgabe_datum_parsed": abgabe,
                 "geht_in_auswahl": False,
                 "grund": "",
             }
 
-            # optional: Studiengang filtern, falls Bearbeitung das Feld hat
+            # optional: Studiengang filtern, falls vorhanden
             if studiengang_id is not None:
                 b_sg = getattr(b, "studiengang_id", None)
                 if b_sg not in (None, studiengang_id):
@@ -239,7 +246,7 @@ class WorkflowService:
                     debug_rows.append(row)
                     continue
 
-            # Regel 1: nur Status "aktiv..."
+            # Regel 1: nur "aktiv"
             if not status_txt.startswith("aktiv"):
                 row["grund"] = f"Status nicht aktiv ('{status_txt}')"
                 debug_rows.append(row)
@@ -252,9 +259,9 @@ class WorkflowService:
                 continue
 
             # Kurs zuordnen
-            kurs = alle_kurse.get(b.kurs_id)
+            kurs = alle_kurse.get(getattr(b, "kurs_id", None))
             if kurs is None:
-                row["grund"] = f"kein Kurs mit id={b.kurs_id} gefunden"
+                row["grund"] = f"kein Kurs mit id={getattr(b, 'kurs_id', None)} gefunden"
                 debug_rows.append(row)
                 continue
 
@@ -264,16 +271,16 @@ class WorkflowService:
             debug_rows.append(row)
             kurse.append(kurs)
 
-        # Debug-Infos am Service ablegen, damit das UI sie sehen kann
+        # Debug im Service ablegen
         self._debug_kurse_fuer_pruefungsabgabe = debug_rows
 
-        # optional: direkt in die Konsole loggen
         if debug:
-            print("DEBUG kurse_fuer_pruefungsabgabe Entscheidungen:", debug_rows)
-            print("DEBUG Kurse:", [k.id for k in kurse])
+            print("DEBUG kurse_fuer_pruefungsabgabe Entscheidungen:")
+            for r in debug_rows:
+                print(r)
+            print("Kurse in Auswahl:", [k.id for k in kurse])
 
         return kurse
-
 
 
     # ---------------- BEARBEITUNGEN ----------------    
@@ -344,47 +351,176 @@ class WorkflowService:
         return kurs_id
 
 
+
+    # ---------------- Action Bar Acktion: Kurs starten ----------------
+    def bearbeitung_starten(self, bearbeitung_id: int, start_datum: date) -> None:
+        b = self._bearb.get_by_id(bearbeitung_id)
+        if not b:
+            raise ValueError(f"Bearbeitung {bearbeitung_id} nicht gefunden")
+
+        b.start_datum = start_datum
+        # Status ggf. auf "aktiv" setzen, wenn dein Enum das hat
+        if hasattr(b, "status"):
+            from models.bearbeitung import StatusBearbeitung
+            try:
+                b.status = StatusBearbeitung.AKTIV
+            except Exception:
+                pass
+
+        self._bearb.update(b)
+
+
     # ---------------- Action Bar Acktion: Prüfung abgeben ----------------
-    def pruefung_abgeben(self, *, student_id: int, kurs_id: int, abgabe_datum: date) -> None:
-        bearb_list: List[Bearbeitung] = []
-        for fn in ("einschreibungen_fuer_student", "list_by_student"):
-            if hasattr(self._bearb, fn):
-                bearb_list = list(getattr(self._bearb, fn)(student_id) or [])
-                break
+    def pruefung_abgeben(self, student_id: int, kurs_id: int, abgabe_datum: date):
+        bearbeitungen = list(self.bearbeitungen_fuer_student(student_id) or [])
+        passende = [b for b in bearbeitungen if getattr(b, "kurs_id", None) == kurs_id]
+        if not passende:
+            raise ValueError("…")
+        b = passende[0]
+        b.abgabe_datum = abgabe_datum
+        self._bearb.update(b)
+        return b
+    
 
-        bearb = next((b for b in bearb_list if b.kurs_id == kurs_id), None)
-        if not bearb:
-            raise ValueError(f"Keine Bearbeitung für Kurs {kurs_id} gefunden")
+    # ---------------- Action Bar Acktion: Bewertung eintragen ----------------
+    def note_fuer_kurs_eintragen(
+        self,
+        *,
+        student_id: int,
+        kurs_id: int,
+        note: float,
+    ) -> Pruefung:
+        """
+        Trägt eine Note für einen Kurs ein.
 
-        bearb.einreichen(abgabe_datum)
-        self._bearb.update(bearb)
+        Fachlogik:
+        - es wird die Bearbeitung des Studenten mit Abgabedatum verwendet
+        - Note 1.0–4.0 -> bestanden = True, Bearbeitung -> ABGESCHLOSSEN
+        - Note > 4.0 -> bestanden = False, Bearbeitung bleibt AKTIV
+        - Versuchszähler wird pro Eintrag hochgezählt
+        (3.-Versuch-Logik fürs Studium kannst du hier später ergänzen)
+        """
 
-    def note_fuer_kurs_eintragen(self, *, student_id: int, kurs_id: int, note: float) -> Pruefung:
-        bearb_list: List[Bearbeitung] = []
-        for fn in ("einschreibungen_fuer_student", "list_by_student"):
-            if hasattr(self._bearb, fn):
-                bearb_list = list(getattr(self._bearb, fn)(student_id) or [])
-                break
+        # 1) passende Bearbeitung finden (mit Abgabedatum)
+        bearb = self._bearb.fuer_student_und_kurs_mit_abgabe(student_id, kurs_id)
+        if bearb is None:
+            raise ValueError(
+                "Es gibt keine Bearbeitung mit Abgabedatum für diesen Kurs. "
+                "Bitte zuerst die Prüfung abgeben."
+            )
 
-        bearb = next((b for b in bearb_list if b.kurs_id == kurs_id), None)
-        if not bearb:
-            raise ValueError(f"Keine Bearbeitung für Kurs {kurs_id} gefunden")
+        bestanden = 1.0 <= float(note) <= 4.0
 
-        pruef = None
-        if hasattr(self._pruef, "get_by_bearbeitung_id"):
-            pruef = self._pruef.get_by_bearbeitung_id(bearb.id)
-        if not pruef:
-            raise ValueError(f"Keine Prüfung für Bearbeitung {bearb.id} gefunden")
+        # 2) bestehende Prüfung zu dieser Bearbeitung laden
+        pruefung = self._pruef.get_by_bearbeitung_id(bearb.id)
 
-        pruef.note_eintragen(note)
+        if pruefung is None:
+            # 2a) erste Bewertung für diese Bearbeitung
+            pruefung = Pruefung(
+                id=None,
+                bearbeitung_id=bearb.id,
+                kurs_id=kurs_id,
+                pruefungsform=None,   # oder vorhandene Logik, falls du eine Form speichern willst
+                note=float(note),
+                versuch_nr=1,
+                bestanden=bestanden,
+                letzter_versuch=False,  # kannst du später setzen, wenn du 3-Versuchs-Logik einbaust
+            )
+            self._pruef.create(pruefung)
+        else:
+            # 2b) weitere Versuche / Noten-Update
+            pruefung.note = float(note)
+            pruefung.versuch_nr = (pruefung.versuch_nr or 0) + 1
+            pruefung.bestanden = bestanden
+            # letzter_versuch kannst du z.B. bei Versuch 3 setzen
+            self._pruef.update(pruefung)
 
-        if getattr(pruef, "bestanden", False):
+        # 3) Bearbeitungs-Status anpassen
+        if bestanden:
             bearb.status = StatusBearbeitung.ABGESCHLOSSEN
             self._bearb.update(bearb)
+        else:
+            # bei Nicht-Bestehen bleibt die Bearbeitung aktiv
+            # (3.-Versuch-Logik könntest du hier ergänzen)
+            pass
 
-        self._pruef.update(pruef)
-        return pruef
+        return pruefung
     
+    def offene_kurse_fuer_bewertung(
+        self,
+        student_id: int,
+    ) -> List[Tuple[Bearbeitung, Kurs, Optional[Pruefung]]]:
+        """
+        Liefert alle Bearbeitungen/Kurse, für die eine Note eingetragen werden kann.
+
+        Kriterien:
+        - Bearbeitung gehört zum Studenten
+        - status == PRUEFUNG_EINGEREICHT
+        - abgabe_datum ist gesetzt
+        """
+
+        bearbeitungen = self.bearbeitungen_fuer_student(student_id)
+        result: List[Tuple[Bearbeitung, Kurs, Optional[Pruefung]]] = []
+        debug_rows = []
+
+        for b in bearbeitungen:
+            abgabe = getattr(b, "abgabe_datum", None)
+            status = getattr(b, "status", None)
+
+            row = {
+                "bearbeitung_id": getattr(b, "id", None),
+                "kurs_id": getattr(b, "kurs_id", None),
+                "status": str(status),
+                "abgabe_datum": abgabe,
+                "offen": False,
+                "grund": "",
+            }
+
+            # 1) Status muss PRUEFUNG_EINGEREICHT sein
+            if status is not StatusBearbeitung.PRUEFUNG_EINGEREICHT:
+                row["grund"] = f"Status nicht PRUEFUNG_EINGEREICHT ({status})"
+                debug_rows.append(row)
+                continue
+
+            # 2) Abgabedatum muss gesetzt sein
+            if not abgabe:
+                row["grund"] = "kein abgabe_datum gesetzt"
+                debug_rows.append(row)
+                continue
+
+            # 3) Kurs holen
+            kurs: Optional[Kurs] = self._kurse.get_by_id(b.kurs_id)
+            if not kurs:
+                row["grund"] = "kein Kurs gefunden"
+                debug_rows.append(row)
+                continue
+
+            # Optional: aktuelle Prüfung holen (falls schon einer bewertet wurde)
+            pruefung: Optional[Pruefung] = self._pruef.get_by_bearbeitung_id(b.id)
+
+            row["grund"] = "OK"
+            row["offen"] = True
+            debug_rows.append(row)
+
+            result.append((b, kurs, pruefung))
+
+        # Debug-Infos für UI
+        self._debug_offene_bewertungen = debug_rows
+        return result
+
+
+    def _behandle_dritten_fehlversuch(self, student_id: int) -> None:
+        """
+        Konsequenzen beim dritten Fehlversuch:
+        z.B. Einschreibung auf 'beendet/nicht bestanden' setzen.
+        Hier implementierst du genau das, was dein Modell vorsieht.
+        """
+        einschreibung = self._einschreibungen.aktive_einschreibung_fuer_student(student_id)
+        if einschreibung:
+            einschreibung.status = "beendet_nicht_bestanden"  # oder Enum
+            self._einschreibungen.update(einschreibung)
+    
+
 
     # ---------------- Action Bar Acktionen: Studium abschließen ----------------
     def studium_abschliessen(self, *, student_id: int, erforderliche_ects: Optional[int] = None) -> bool:

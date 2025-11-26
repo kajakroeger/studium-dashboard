@@ -90,20 +90,6 @@ def render_status_uebersicht(service, student_id: int, studiengang_id: int):
                 help="Durchschnittliche Bearbeitungszeit pro 5 ECTS"
             )
 
-        # 🔍 Debug-Block für die Berechnungsdetails
-        with st.expander("Debug Ø-Bearbeitungszeit"):
-            st.write("Ø Tage pro 5 ECTS laut Service:", avg_days_per_5ects)
-
-            debug_rows = getattr(service, "_debug_durchschnittszeit", None)
-
-            # Wenn nicht da → ProgressService probieren
-            if debug_rows is None and hasattr(service, "_progress"):
-                debug_rows = getattr(service._progress, "_debug_durchschnittszeit", None)
-
-            if debug_rows:
-                st.json(debug_rows)
-            else:
-                st.write("Keine Debug-Daten gefunden. Wurde die Funktion aufgerufen?")
 
 
 def _donut(percent: float, center_text: str):
