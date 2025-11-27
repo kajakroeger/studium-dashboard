@@ -183,6 +183,12 @@ class FortschrittService:
     def verlauf_bearbeitungszeiten(self, student_id: int):
         return self._progress.verlauf_bearbeitungszeiten(student_id)
     
+    def alle_bestandenen_noten(self, student_id: int):
+        return self._progress.alle_bestandenen_noten(student_id)
+    
+    def benoetigte_note_naechster_kurs(self, student_id: int):
+        return self._progress.benoetigte_note_naechster_kurs(student_id)
+    
 
 
 __all__ = [

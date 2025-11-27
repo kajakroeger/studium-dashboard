@@ -11,8 +11,8 @@ def render_studienziele(service, student_id: int):
         st.write("Ziel Abschlussdatum:" , ziel_enddatum or "N/A")
 
         # Notenschnitt (nur bestandene Prüfungen, laut deiner Logik im Service)
-        notenschnitt = service.berechne_notenschnitt(student_id)
-        st.metric(
-            "Aktueller Notenschnitt:",
-            notenschnitt if notenschnitt is not None else "–",
+        ziel_notenschnitt = getattr(eins, "ziel_notenschnitt", None)
+        st.write(
+            "Zielnote mindestens:",
+            ziel_notenschnitt if ziel_notenschnitt is not None else "–",
         )
