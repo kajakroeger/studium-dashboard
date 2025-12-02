@@ -18,10 +18,19 @@ class KursRepository(ABC):
         raise NotImplementedError
 
     @abstractmethod
-    def all(self) -> Iterable[Kurs]: 
+    def list_all(self) -> Iterable[Kurs]: 
         """Liefert alle Kurse (ggf. paginiert, hier der Einfachheit halber vollständige Liste)."""
         raise NotImplementedError
     
+    @abstractmethod
+    def exists_by_name(self, name: str) -> bool:
+        """Prüft, ob ein Kurs mit diesem Namen existiert."""
+        raise NotImplementedError
+    
+    @abstractmethod
+    def exists_by_kuerzel(self, kurs_kuerzel: str) -> bool:
+        """Prüft, ob ein Kurs mit diesem Kürzel existiert"""
+
     @abstractmethod
     def create(self, kurs: Kurs) -> int: 
         """Erstellt einen Datensatz und gibt die neue ID zurück."""
@@ -37,13 +46,5 @@ class KursRepository(ABC):
         """Löscht einen Datensatz (falls vorhanden, ansonsten no-op)."""
         raise NotImplementedError
     
-    @abstractmethod
-    def exists_by_name(self, name: str) -> bool:
-        """Liefert einen Kurs anhand des Kürzels oder None, falls nicht vorhanden."""
-        raise NotImplementedError
-    
-    @abstractmethod
-    def exists_by_kuerzel(self, kurs_kuerzel: str) -> bool:
-        """Liefert einen Kurs anhand des Kürzels oder None, falls nicht vorhanden."""
-        raise NotImplementedError
+
 

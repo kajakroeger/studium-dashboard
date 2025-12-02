@@ -24,3 +24,12 @@ class Studiengang:
     def __str__(self) -> str:
         """Gibt den Namen des Studiengangs aus."""
         return f"{self.name} ({self.ects_gesamt} ECTS, {len(self.semester)} Semester)"
+    
+    @property
+    def ziel_ects(self) -> int:
+        """Gibt die Gesamt-ECTS des Studiengangs zurück."""
+        return int(self.ects_gesamt or 0)
+    
+
+
+

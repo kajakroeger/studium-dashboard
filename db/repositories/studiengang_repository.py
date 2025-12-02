@@ -3,7 +3,7 @@
 Interface für Studiengang-Zugriffe.
 """
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Iterable, Optional
 from models import Studiengang
 
 class StudiengangRepository(ABC):
@@ -20,3 +20,7 @@ class StudiengangRepository(ABC):
     @abstractmethod
     def get_by_name(self, name: str) -> Optional[Studiengang]: 
         """Liefert den Studiengang mit dem gegebenen Namen oder None."""
+
+    @abstractmethod
+    def list_all(self) -> Iterable[Studiengang]:
+        """Liefert alle Studiengänge"""

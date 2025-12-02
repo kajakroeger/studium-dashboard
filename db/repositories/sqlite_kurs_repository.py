@@ -49,7 +49,7 @@ class SQLiteKursRepository(KursRepository):
             ).fetchone()
         return None if row is None else self._row_to_model(row)
 
-    def all(self) -> Iterable[Kurs]:
+    def list_all(self) -> Iterable[Kurs]:
         with self._provider.connect() as conn:
             rows = conn.execute(
                 "SELECT id, name, kurs_kuerzel, ects, tutor, semester FROM kurs ORDER BY name"

@@ -313,8 +313,8 @@ def finish_studium_dialog(service: FortschrittService, current_student_id: Optio
 
     # --- Studiengang laden (ECTS-Ziel) ---
     try:
-        studiengaenge = service.studiengaenge_fuer_student(current_student_id) or []
-        ziel_ects = studiengaenge[0].ects_gesamt if studiengaenge else None
+        studiengaenge = service.studiengaenge_by_student_id(current_student_id) or []
+        ziel_ects = studiengaenge[0].ziel_ects
     except Exception:
         ziel_ects = None
 
@@ -396,8 +396,7 @@ def settings_dialog(current_student_id: Optional[int]):
 
 def render_action_bar(
     service: FortschrittService,
-    students: StudentRepository,
-    current_student_id: Optional[int],
+    student_id: Optional[int],
 ) -> None:
     """Eine Zeile von Buttons – jeder Button öffnet einen eigenen Dialog."""
     
@@ -457,24 +456,24 @@ def render_action_bar(
     # Dialoge aufrufen
     if st.session_state.get("show_add_kurs_dialog", False):
         st.session_state["show_add_kurs_dialog"] = False
-        add_kurs_dialog(service, current_student_id)
+        add_kurs_dialog(service, student_id)
 
     if st.session_state.get("show_start_kurs_dialog", False):
         st.session_state["show_start_kurs_dialog"] = False
-        start_kurs_dialog(service, current_student_id)
+        start_kurs_dialog(service, student_id)
     
     if st.session_state.get("show_submit_pruefung_dialog", False):
         st.session_state["show_submit_pruefung_dialog"] = False
-        submit_pruefung_dialog(service, current_student_id)
+        submit_pruefung_dialog(service, student_id)
     
     if st.session_state.get("show_add_bewertung_dialog", False):
         st.session_state["show_add_bewertung_dialog"] = False
-        add_bewertung_dialog(service, current_student_id)
+        add_bewertung_dialog(service, student_id)
     
     if st.session_state.get("show_finish_studium_dialog", False):
         st.session_state["show_finish_studium_dialog"] = False
-        finish_studium_dialog(service, current_student_id)
+        finish_studium_dialog(service, student_id)
     
     if st.session_state.get("show_settings_dialog", False):
         st.session_state["show_settings_dialog"] = False
-        settings_dialog(current_student_id)
+        settings_dialog(student_id)

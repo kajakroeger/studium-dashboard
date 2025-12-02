@@ -68,8 +68,6 @@ class FortschrittService:
 
 
 
-
-
     # ---------------- CRUD/Workflows (Delegationen) ------------
     # ---------------- Student ------------
     def create_student(self, **kwargs) -> int:
@@ -84,17 +82,15 @@ class FortschrittService:
 
 
     # ---------------- Studiengang ------------
+    
     def studiengang_by_id(self, studiengang_id: int):
         return self._workflow.studiengang_by_id(studiengang_id)
     
     def studiengang_by_name(self, name: str):
         return self._workflow.studiengang_by_name(name)
     
-    def studiengaenge_fuer_student(self, student_id: int):
-        return self._workflow.studiengaenge_fuer_student(student_id)
-    
-    def studiengang_all(self):
-        return self._workflow.studiengang_all()
+    def studiengaenge_by_student_id(self, student_id: int):
+        return self._workflow.studiengaenge_by_student_id(student_id)
     
 
 
@@ -108,8 +104,9 @@ class FortschrittService:
 
 
     # ---------------- Kurse ----------------
-    def kurse_all(self):
-        return self._workflow.kurse_all()
+
+    def kurse_fuer_student(self, student_id: int):
+        return self._workflow.kurse_fuer_student(student_id)
 
     def kurs_by_id(self, kurs_id: int):
         return self._workflow.kurs_by_id(kurs_id)
@@ -125,16 +122,22 @@ class FortschrittService:
     
 
     
-    # ---------------- Bearbeitungen der Kurse ----------------
+    # ---------------- Bearbeitungen ----------------
+
     def bearbeitungen_fuer_student(self, student_id: int):
         return self._workflow.bearbeitungen_fuer_student(student_id)
+    
 
-    def pruefungen_fuer_student(self, student_id: int):
-        return self._workflow.pruefungen_fuer_student(student_id)
+    
+    # ---------------- Prüfungen ----------------
+
+    def pruefung_fuer_bearbeitung(self, bearbeitung_id: int):
+        return self._workflow.pruefung_fuer_bearbeitung(bearbeitung_id)
     
 
 
-    # ---------------- Action Bar Acktionen ------------
+    # ---------------- Action Bar Aktionen ------------
+
     def add_kurs_mit_bearbeitung_und_pruefung(self, **kwargs):
         return self._workflow.add_kurs_mit_bearbeitung_und_pruefung(**kwargs)
     
@@ -156,14 +159,6 @@ class FortschrittService:
 
 
     # ---------------- KPIs / Fortschritt ------------
-    def hole_studienziele(self, student_id: int) -> StudienzieleDTO:
-        return self._goals.hole_studienziele(student_id)
-    
-    def ziel_ects(self, student_id: int, studiengang_id: int | None = None) -> int:
-        return self._workflow.ziel_ects(student_id, studiengang_id)
-    
-    def berechne_ziel_status(self, student_id: int) -> ZielStatusDTO:
-        return self._goals.berechne_ziel_status(student_id)
 
     def berechne_notenschnitt(self, student_id: int):
         return self._progress.berechne_notenschnitt(student_id)
@@ -171,17 +166,11 @@ class FortschrittService:
     def ects_summe_bestanden(self, student_id: int):
         return self._progress.ects_summe_bestanden(student_id)
 
-    def gesamtuebersicht(self, student_id: int):
-        return self._progress.gesamtuebersicht(student_id)
+    # def gesamtuebersicht(self, student_id: int):
+    #     return self._progress.gesamtuebersicht(student_id)
     
     def berechne_bearbeitungszeit(self, student_id: int) -> int:
         return self._progress.berechne_bearbeitungszeit(student_id)
-    
-    def bearbeitungsdauer_in_tagen(self, student_id: int):
-        return self._progress.bearbeitungsdauer_in_tagen(student_id)
-    
-    def verlauf_bearbeitungszeiten(self, student_id: int):
-        return self._progress.verlauf_bearbeitungszeiten(student_id)
     
     def alle_bestandenen_noten(self, student_id: int):
         return self._progress.alle_bestandenen_noten(student_id)

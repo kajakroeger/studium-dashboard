@@ -15,7 +15,7 @@ class StatusBearbeitung(Enum):
     """Definiert die möglichen Status einer Bearbeitung."""
     INAKTIV = "inaktiv"
     AKTIV = "aktiv"
-    PRUEFUNG_EINGEREICHT = "Prüfung eingereicht"
+    eingereicht = "Prüfung eingereicht"
     ABGESCHLOSSEN = "abgeschlossen"
 
 
@@ -46,19 +46,16 @@ class Bearbeitung:
             )
         
         self.abgabe_datum = abgabe_datum
-        self.status = StatusBearbeitung.PRUEFUNG_EINGEREICHT
+        self.status = StatusBearbeitung.eingereicht
 
     def ist_abgeschlossen(self) -> bool:
         """Gibt True zurück, wenn die Bearbeitung abgeschlossen ist (d. h. Abgabedatum vorhanden)."""
         return self.abgabe_datum is not None
 
     def bearbeitungszeit(self) -> Optional[int]:
-        """
-        Gibt die Bearbeitungszeit in Tagen zurück, falls Abgabedatum vorhanden.
-        Ansonsten None.
-        """
-        if self.abgabe_datum:
-            return (self.abgabe_datum - self.start_datum).days
-        return None
+        """Gibt die Bearbeitungszeit in Tagen zurück,falls Start- und Abgabedatum vorhanden sind."""
+        if self.start_datum is None or self.abgabe_datum is None:
+            return None
+        return (self.abgabe_datum - self.start_datum).days
     
 

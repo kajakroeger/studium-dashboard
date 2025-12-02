@@ -30,13 +30,12 @@ def render_studienziele_status(service, student_id: int, ziel_tage_pro_5ects: fl
 
         # Studiengang (für anzahl_kurse & ects_gesamt)
         try:
-            studiengaenge = service.studiengaenge_fuer_student(student_id) or []
+            studiengaenge = service.studiengaenge_by_student_id(student_id) or []
         except Exception:
             studiengaenge = []
 
         sg = studiengaenge[0] if studiengaenge else None
         gesamt_kurse: Optional[int] = getattr(sg, "anzahl_kurse", None)
-        ziel_ects: Optional[float] = getattr(sg, "ects_gesamt", None) if sg else None
 
         # Alle bisherigen Noten (nur bestandene)
         try:
@@ -183,5 +182,3 @@ def render_studienziele_status(service, student_id: int, ziel_tage_pro_5ects: fl
                         f"👌 Du liegst ziemlich genau in deinem Zieltempo "
                         f"({ziel_tage_pro_5ects:.0f} Tage pro 5 ECTS)."
                     )
-
-

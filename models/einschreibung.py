@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 
 class StatusEinschreibung(Enum):
     AKTIV = "aktiv"
+    INAKTIV= "inaktiv"
     ABGESCHLOSSEN = "abgeschlossen"
     ABGEBROCHEN = "abgebrochen"
 
@@ -59,4 +60,21 @@ class Einschreibung:
         if self.end_datum is None:
             return None
         return self.end_datum - self.start_datum
+    
 
+
+#################################################
+    @property
+    def ist_aktiv(self) -> bool:
+        """Liefert True, wenn die Einschreibung aktiv ist"""
+        return self.status == StatusEinschreibung.AKTIV
+
+    @property
+    def ist_abgeschlossen(self) -> bool:
+        """Liefert True, wenn der Studiengang abgeschlossen wurde."""
+        return self.status == StatusEinschreibung.ABGESCHLOSSEN
+
+    @property
+    def ist_abgebrochen(self) -> bool:
+        """Liefert True, wenn die Einschreibung abgebrochen wurde."""
+        return self.status == StatusEinschreibung.ABGEBROCHEN

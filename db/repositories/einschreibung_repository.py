@@ -11,12 +11,17 @@ class EinschreibungRepository(ABC):
     """Abstraktes Repository für Einschreibungen."""
 
     @abstractmethod
-    def get_aktive_fuer_student(self, student_id: int) -> Optional[Einschreibung]: 
+    def get_by_id(self, einschreibung_id: int) -> Optional[Einschreibung]:
+        """Liefert eine Einschreibung oder None"""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_active_for_student(self, student_id: int) -> Optional[Einschreibung]: 
         """Liefert die aktive Einschreibung für einen Studenten oder None, falls nicht vorhanden."""
         raise NotImplementedError
     
     @abstractmethod
-    def alle_fuer_student(self, student_id: int) -> Iterable[Einschreibung]: 
+    def list_by_student(self, student_id: int) -> Iterable[Einschreibung]: 
         """Liefert alle Einschreibungen für einen Studenten."""
         raise NotImplementedError
     

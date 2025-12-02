@@ -77,7 +77,7 @@ class SQLiteBearbeitungRepository(BearbeitungRepository):
             ).fetchone()
         return self._row_to_model(row) if row else None
 
-    def einschreibungen_fuer_student(self, student_id: int) -> Iterable[Bearbeitung]:
+    def list_by_student(self, student_id: int) -> Iterable[Bearbeitung]:
         with self._provider.connect() as conn:
             rows = conn.execute(
                 "SELECT id, student_id, kurs_id, status, plan_start, plan_end, start_datum, abgabe_datum "
@@ -135,7 +135,7 @@ class SQLiteBearbeitungRepository(BearbeitungRepository):
             conn.commit()
 
 
-    def fuer_student_und_kurs_mit_abgabe(
+    def get_for_student_and_course_with_submission(
         self,
         student_id: int,
         kurs_id: int,

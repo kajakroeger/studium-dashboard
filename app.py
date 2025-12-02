@@ -12,8 +12,8 @@ from ui.theming import apply_global_theme
 
 def main() -> None:
     st.set_page_config(page_title="Studium Dashboard", page_icon="🎓", layout="wide")
-    service, student_repo = build_service("studium.db")
-    render_dashboard(service, student_repo)    
+    service = build_service("studium.db")
+    render_dashboard(service)    
 
     # apply_global_theme()
 

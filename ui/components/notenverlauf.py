@@ -2,43 +2,48 @@
 """
 Visualisiert den Notenverlauf über alle abgeschlossenen Kurse.
 Zeigt die Noten als Linienchart mit Kurskürzel auf der X-Achse.
-Entspricht dem Wireframe-Design.
 """
-
-from typing import List, Tuple, Optional
+from typing import List, Tuple
 import streamlit as st
 import plotly.graph_objects as go
+
+from models.bearbeitung import StatusBearbeitung
 from .kachel import kachel
 
 
-def render_notenverlauf(service, student_id: int):
+def render_notenverlauf(service, student_id: int, studiengang_id: int | None = None):   
     """
     Rendert den Notenverlauf inkl. Verlauf des Durchschnitts.
     """
     with kachel("NOTENVERLAUF"):
+        # Noten-Daten laden
         noten_daten = _lade_noten_mit_kursnamen(service, student_id)
 
         if not noten_daten:
-            st.info("Noch keine Noten vorhanden. Sobald Kurse abgeschlossen sind, erscheint hier der Notenverlauf.")
+            st.info(
+                "Noch keine Noten vorhanden. "
+                "Sobald Kurse abgeschlossen sind, erscheint hier der Notenverlauf."
+            )
             return
 
         # Daten vorbereiten
-        kursnamen        = [kurs_name for kurs_name, _, _, _ in noten_daten]
-        noten            = [note for _, note, _, _ in noten_daten]
-        pruefungsformen  = [pf   for _, _, _, pf in noten_daten]
+        kursnamen = [kurs_name for kurs_name, _, _ in noten_daten]
+        noten = [note for _, note, _ in noten_daten]
+        pruefungsformen = [pf for _, _, pf in noten_daten]
 
-        # Laufender Durchschnitt (Ø bis zu dieser Prüfung)
+        # Laufender Durchschnitt berechnen
         running_avgs = []
         total = 0.0
-        for i, n in enumerate(noten):
+        for i, n in enumerate(noten, start=1):
             total += n
-            running_avgs.append(total / (i + 1))
+            running_avgs.append(total / i)
 
         overall_avg = running_avgs[-1]
 
         # customdata: [running_avg, pruefungsform]
         customdata = list(zip(running_avgs, pruefungsformen))
 
+        # Plotly Figure erstellen
         fig = go.Figure()
 
         # 1) Notenlinie (Türkis)
@@ -74,7 +79,7 @@ def render_notenverlauf(service, student_id: int):
             showlegend=True
         ))
 
-        # Layout (Dark Theme, wie Kacheln)
+        # Layout
         fig.update_layout(
             height=300,
             margin=dict(l=40, r=20, t=20, b=60),
@@ -94,7 +99,7 @@ def render_notenverlauf(service, student_id: int):
                 zeroline=False,
                 color="rgba(220,220,220,0.85)",
             ),
-            plot_bgcolor='rgba(0,0,0,0)',   # transparent → gleiche Kachel-Farbe
+            plot_bgcolor='rgba(0,0,0,0)',
             paper_bgcolor='rgba(0,0,0,0)',
             font=dict(color='white'),
             hovermode='x unified',
@@ -102,16 +107,16 @@ def render_notenverlauf(service, student_id: int):
             legend=dict(
                 orientation="h",
                 yanchor="middle",
-                y=1.07,    # Leicht über dem Plot – auf Titelhöhe
+                y=1.07,
                 xanchor="right",
-                x=0.98,    # Rechtsbündig
+                x=0.98,
                 font=dict(color="white", size=11),
             ),
         )
 
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
-        # Optional: darunter noch Kennzahlen
+        # Kennzahlen
         col1, col2, col3 = st.columns(3)
         with col1:
             st.metric("Durchschnittsnote", f"{overall_avg:.2f}")
@@ -123,70 +128,48 @@ def render_notenverlauf(service, student_id: int):
             st.metric("Abgeschlossene Kurse", anzahl_kurse)
 
 
-
-def _lade_noten_mit_kursnamen(service, student_id: int) -> List[Tuple[str, float, str, str]]:
+def _lade_noten_mit_kursnamen(service, student_id: int) -> List[Tuple[str, float, str]]:
     """
-    Lädt alle Noten mit Kursnamen und Prüfungsform für abgeschlossene Kurse.
-
-    Returns:
-        Liste von Tupeln: (kurs_display, note, abgabedatum_str, pruefungsform)
-        Sortiert nach Abgabedatum.
+    Liefert: [(kurs_display, note, pruefungsform_str), ...]
     """
-    noten_daten: List[Tuple[str, float, str, str]] = []
+    noten_daten: List[Tuple[str, float, str]] = []
 
     try:
-        # Bearbeitungen für den Studenten holen
-        bearbeitungen = getattr(service, "bearbeitungen_fuer_student", lambda _sid: [])(student_id) or []
-
-        # Prüfungs-Repo über den Workflow holen
-        pruef_repo = getattr(service._workflow, "_pruef", None)
-        if pruef_repo is None or not hasattr(pruef_repo, "get_by_bearbeitung_id"):
-            return []
+        bearbeitungen = service.bearbeitungen_fuer_student(student_id)
 
         for b in bearbeitungen:
-            # Status (Enum oder String) robust als Text holen
-            raw_status = getattr(b, "status", "")
-            status_text = getattr(raw_status, "value", raw_status)
-            status_text = str(status_text).strip().lower()
-
             # Nur abgeschlossene Bearbeitungen mit Abgabedatum
-            if status_text != "abgeschlossen":
+            if b.status != StatusBearbeitung.ABGESCHLOSSEN:
                 continue
-            if not getattr(b, "abgabe_datum", None):
-                continue
-
-            # Prüfung laden
-            p = pruef_repo.get_by_bearbeitung_id(getattr(b, "id", None))
-            if not p:
+            if not b.abgabe_datum:
                 continue
 
-            note = getattr(p, "note", None)
-            bestanden = bool(getattr(p, "bestanden", False))
-
-            if note is None or not bestanden:
+            # Prüfung über die Fassade holen
+            pruefung = service.pruefung_fuer_bearbeitung(b.id)
+            if not pruefung:
                 continue
 
-            pruefungsform = getattr(p, "pruefungsform", None)
-            pruefungsform_str = str(getattr(pruefungsform, "value", pruefungsform) or "").strip() or "–"
+            # Nur bestandene Prüfungen mit Note
+            if not pruefung.bestanden or pruefung.note is None:
+                continue
 
-            # Kursdaten
+            pruefungsform_str = (
+                pruefung.pruefungsform.value
+                if pruefung.pruefungsform
+                else "—"
+            )
+
             kurs = service.kurs_by_id(b.kurs_id)
             if not kurs:
                 continue
 
-            kuerzel = getattr(kurs, "kurs_kuerzel", getattr(kurs, "name", ""))
+            kuerzel = kurs.kurs_kuerzel or kurs.name
             if len(kuerzel) > 20:
                 kuerzel = kuerzel[:17] + "..."
 
-            abgabe = b.abgabe_datum
-            abgabe_str = abgabe.strftime("%Y-%m-%d") if hasattr(abgabe, "strftime") else str(abgabe)
-
-            noten_daten.append((kuerzel, float(note), abgabe_str, pruefungsform_str))
+            noten_daten.append((kuerzel, float(pruefung.note), pruefungsform_str))
 
     except Exception as e:
         st.error(f"Fehler beim Laden der Noten: {e}")
-
-    # Nach Abgabedatum sortieren
-    noten_daten.sort(key=lambda x: x[2])
 
     return noten_daten

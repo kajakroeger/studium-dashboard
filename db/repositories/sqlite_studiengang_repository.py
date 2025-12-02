@@ -68,7 +68,7 @@ class SQLiteStudiengangRepository(StudiengangRepository):
             ects_gesamt=int(row["ects_gesamt"]),
         )
     
-    def all(self):
+    def list_all(self):
         with self._provider.connect() as conn:
             rows = conn.execute(
                 "SELECT id, name, anzahl_monate, anzahl_kurse, ects_gesamt FROM studiengang ORDER BY id"

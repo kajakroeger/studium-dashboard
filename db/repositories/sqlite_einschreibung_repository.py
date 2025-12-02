@@ -48,7 +48,7 @@ class SQLiteEinschreibungRepository:
             ).fetchone()
         return self._row_to_model(row) if row else None
 
-    def get_aktive_fuer_student(self, student_id: int) -> Optional[Einschreibung]:
+    def get_active_for_student(self, student_id: int) -> Optional[Einschreibung]:
         with self._provider.connect() as conn:
             row = conn.execute(
                 "SELECT id, student_id, studiengang_id, start_datum, ziel_enddatum, "
@@ -59,7 +59,7 @@ class SQLiteEinschreibungRepository:
             ).fetchone()
         return self._row_to_model(row) if row else None
 
-    def einschreibungen_fuer_student(self, student_id: int) -> Iterable[Einschreibung]:
+    def list_by_student(self, student_id: int) -> Iterable[Einschreibung]:
         with self._provider.connect() as conn:
             rows = conn.execute(
                 "SELECT id, student_id, studiengang_id, start_datum, ziel_enddatum, "

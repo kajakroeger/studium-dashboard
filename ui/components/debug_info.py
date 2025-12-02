@@ -2,7 +2,7 @@ import streamlit as st
 
 
 # Hauptfunktion -----------------------------------------------------
-def render_debug_info(service, students, student_id, studiengang_id):
+def render_debug_info(service, student_id):
     """
     Zeigt umfangreiche Debug-Infos zum gewählten Studenten an:
     - Studentendaten
@@ -30,7 +30,7 @@ def render_debug_info(service, students, student_id, studiengang_id):
             
             # ---------- Studiengang ----------
             if st.checkbox("Studiengang"):
-                studiengaenge = service.studiengaenge_fuer_student(student_id)
+                studiengaenge = service.studiengaenge_by_student_id(student_id)
                 if studiengaenge:
                     st.write(f"Gefundene Studiengänge: {len(studiengaenge)}")
                     st.json([
@@ -49,7 +49,7 @@ def render_debug_info(service, students, student_id, studiengang_id):
 
             # ---------- Einschreibungen ----------
             if st.checkbox("Einschreibungen"):
-                enrs = service.einschreibungen_fuer_student(student_id)  # Liste!
+                enrs = service.list_by_student(student_id)  # Liste!
                 if enrs:
                     st.write(f"Gefunden: {len(enrs)}")
                     st.json([
@@ -72,7 +72,7 @@ def render_debug_info(service, students, student_id, studiengang_id):
 
             # ---------- Kurse ----------
             if st.checkbox("Kurse"):
-                kurse = service.kurse_all()
+                kurse = service.kurse_fuer_student(student_id)
                 if kurse:
                     st.write(f"Gefunden: {len(kurse)}")
                     st.json([
