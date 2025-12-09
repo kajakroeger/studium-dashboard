@@ -15,7 +15,7 @@ class StatusBearbeitung(Enum):
     """Definiert die möglichen Status einer Bearbeitung."""
     INAKTIV = "inaktiv"
     AKTIV = "aktiv"
-    eingereicht = "Prüfung eingereicht"
+    EINGEREICHT = "Prüfung eingereicht"
     ABGESCHLOSSEN = "abgeschlossen"
 
 

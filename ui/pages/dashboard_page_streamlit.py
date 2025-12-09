@@ -5,6 +5,9 @@ Orchestriert die Dashboard-Seite: lädt den (einzigen) Studenten, Studiengang et
 from typing import Optional
 import streamlit as st
 
+from core.viewmodel_builder import ViewModelBuilder
+from debug_script import debug_bearbeitungszeit_detailliert
+from models.bearbeitung import StatusBearbeitung
 from ui.components.action_bar import render_action_bar
 from ui.components.debug_info import render_debug_info
 
@@ -18,11 +21,16 @@ from ui.components.notenverlauf import render_notenverlauf
 from ui.components.bearbeitungsverlauf import render_bearbeitungsverlauf
 
 
-def render_dashboard(service) -> None:
+def render_dashboard_streamlit(service, vm_builder: ViewModelBuilder) -> None:
     """
     Rendert das Dashboard für genau einen Studenten.
     In dieser Version wird immer der erste vorhandene Student verwendet.
     """
+    st.set_page_config(
+        page_title="Studium Dashboard",
+        page_icon="🎓",
+        layout="wide",
+    )
     st.title("🎓 Studium Dashboard")
 
     # 1) Studierende über den Service holen
@@ -49,9 +57,10 @@ def render_dashboard(service) -> None:
     # 2) In dieser Phase: immer den ersten Studenten verwenden
     student = students[0]
     student_id = student.id
+    student_name = student.name
 
     # Optional: Infos zum aktuell verwendeten Studenten anzeigen
-    st.caption(f"Aktueller Student: {getattr(student, 'name', f'ID {student_id}')}")
+    st.caption(f"Aktueller Student: {student_name}")
     
     # 3) Studiengang auswählen/ermitteln
     studiengang_id = _select_studiengang(service, student_id)
@@ -73,9 +82,11 @@ def render_dashboard(service) -> None:
     if studiengang_id:
         left, right = st.columns(2, gap="large")
         with left:
-            render_studienziele(service, student_id)
+            studienziele_vm = vm_builder.build_studienziele(student_id, studiengang_id)
+            render_studienziele(studienziele_vm)
         with right:
-            render_studienziele_status(service, student_id)
+            studienziele_status_vm = vm_builder.build_studienziele_status(student_id, ziel_tage_pro_5ects=30.0)
+            render_studienziele_status(studienziele_status_vm)
     else:
         st.info("Studienziele werden angezeigt, sobald ein Studiengang angelegt ist.")
 
@@ -83,14 +94,16 @@ def render_dashboard(service) -> None:
     row2_left, row2_right = st.columns(2, gap="large")
     with row2_left:
         if studiengang_id:
-            render_status_uebersicht(service, student_id, studiengang_id)
+            status_uebersicht_vm = vm_builder.build_status_uebersicht(student_id, studiengang_id)
+            render_status_uebersicht(status_uebersicht_vm)
         else:
             st.info(
                 "Status-Übersicht wird angezeigt, sobald ein Studiengang angelegt ist."
             )
     with row2_right:
         if studiengang_id:
-            render_burndown_chart(service, student_id, studiengang_id)
+            burndown_chart_vm = vm_builder.build_burndown_chart(student_id, studiengang_id)
+            render_burndown_chart(burndown_chart_vm)
         else:
             st.info(
                 "Burndown Chart wird angezeigt, sobald ein Studiengang angelegt ist."
@@ -100,14 +113,16 @@ def render_dashboard(service) -> None:
     row3_left, row3_right = st.columns(2, gap="large")
     with row3_left:
         if studiengang_id:
-            render_notenverlauf(service, student_id, studiengang_id)
+            notenverlauf_vm = vm_builder.build_notenverlauf(student_id, studiengang_id)
+            render_notenverlauf(notenverlauf_vm)
         else:
             st.info(
                 "Notenverlauf wird angezeigt, sobald ein Studiengang angelegt ist."
             )
     with row3_right:
         if studiengang_id:
-            render_bearbeitungsverlauf(service, student_id, studiengang_id)
+            bearbeitungsverlauf_vm = vm_builder.build_bearbeitungsverlauf(student_id, studiengang_id)
+            render_bearbeitungsverlauf(bearbeitungsverlauf_vm)
         else:
             st.info(
                 "Bearbeitungsverlauf wird angezeigt, sobald ein Studiengang angelegt ist."
@@ -115,7 +130,8 @@ def render_dashboard(service) -> None:
 
     # 4. Zeile: Kursplan
     if studiengang_id:
-        render_kursplan_gantt(service, student_id, studiengang_id)
+        kursplan_vm = vm_builder.build_kursplan(student_id, studiengang_id)
+        render_kursplan_gantt(kursplan_vm)
     else:
         st.info(
             "Kursplan wird angezeigt, sobald ein Studiengang angelegt ist."
@@ -128,11 +144,11 @@ def _select_studiengang(service, student_id: int) -> Optional[int]:
     einen passenden Studiengang. Speichert die Auswahl zusätzlich in
     st.session_state["studiengang_id"].
     """
-    get_all = getattr(service, "einschreibungen_fuer_student", None)
-    if not callable(get_all):
+    try:
+        einschreibungen = service.einschreibungen_fuer_student(student_id)
+    except Exception as ex:
+        st.error(f"Fehler beim Laden der Einschreibungen: {ex}")
         return None
-        
-    einschreibungen = get_all(student_id)
     if not einschreibungen:
         return None
 

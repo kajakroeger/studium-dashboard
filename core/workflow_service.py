@@ -7,9 +7,10 @@ OPTIMIERT:
 - Klarere Verantwortlichkeiten
 """
 from __future__ import annotations
-from datetime import date
-from typing import Optional, List, Tuple
+from datetime import date, timedelta
+from typing import Dict, Iterable, Optional, List, Tuple
 
+from core.dtos import NotenZielStatus, TempoStatus
 from models.student import Student
 from models.bearbeitung import Bearbeitung, StatusBearbeitung
 from models.einschreibung import Einschreibung, StatusEinschreibung
@@ -145,7 +146,6 @@ class WorkflowService:
     
 
     # ==================== Kurse ====================
-
     def kurse_fuer_student(self, student_id: int, studiengang_id: Optional[int] = None,) -> List[Kurs]:
         """Liefert alle Kurse, die ein Student belegt – optional gefiltert 
         nach einem Studiengang. Grundlage sind die Bearbeitungen des Studenten."""
@@ -212,6 +212,262 @@ class WorkflowService:
         """Liefert alle Bearbeitungen eines Studenten."""
         return list(self._bearb.list_by_student(student_id))
     
+
+    def bearbeitungszeit(self, b: Bearbeitung) -> Optional[int]:
+        """
+        Gibt die Bearbeitungszeit in Tagen für eine Bearbeitung zurück.
+        - Nutzt start_datum und abgabe_datum direkt (keine _to_date-Hilfsfunktion).
+        - Gibt None zurück, wenn Daten fehlen oder die Dauer negativ ist.
+        """
+        start = getattr(b, "start_datum", None)
+        ende = getattr(b, "abgabe_datum", None)
+
+        if not start or not ende:
+            # Keine vollständigen Datumsangaben -> keine Dauer berechenbar
+            return None
+
+        # Unterschied in Tagen
+        tage = (ende - start).days
+
+        # Sicherheitscheck: negative Werte ignorieren (fehlerhafte Daten)
+        if tage < 0:
+            return None
+
+        return tage
+    
+
+    def bearbeitungszeit_durchschnitt(
+        self,
+        bearbeitungen: Iterable[Bearbeitung],
+    ) -> Optional[float]:
+        """
+        Gibt die aktuell durchschnittliche Bearbeitungszeit zurück.
+        Nutzt intern bearbeitungszeit_verlauf und nimmt den letzten Wert.
+        """
+        verlauf = self.bearbeitungszeit_durchschnitt_verlauf(bearbeitungen)
+
+        if not verlauf:
+            return None
+
+        # Letzter Eintrag des Verlaufs = aktueller Durchschnitt
+        letzter_punkt = verlauf[-1]
+        return float(letzter_punkt["avg_dauer_tage"])
+    
+    
+    def bearbeitungszeit_durchschnitt_verlauf(
+        self,
+        bearbeitungen: Iterable[Bearbeitung],
+    ) -> List[Dict]:
+        """
+        Berechnet den Verlauf der durchschnittlichen Bearbeitungszeit.
+
+        Schritte:
+        - Filtert auf ABGESCHLOSSENE Bearbeitungen mit gültiger Bearbeitungszeit.
+        - Sortiert nach Abgabedatum (Fallback: Startdatum).
+        - Berechnet nach jeder Bearbeitung den neuen Durchschnitt.
+
+        Rückgabeformat (Liste von Punkten), z. B.:
+        [
+            {
+                "index": 1,               # 1., 2., 3. Bearbeitung ...
+                "datum": date(...),       # Abgabe- oder Startdatum
+                "avg_dauer_tage": 12.5,   # laufender Durchschnitt in Tagen
+            },
+            ...
+        ]
+        """
+        # 1) Nur Bearbeitungen berücksichtigen, die abgeschlossen sind
+        #    und eine gültige Bearbeitungszeit haben.
+        daten: List[Dict] = []
+
+        for b in bearbeitungen:
+            if getattr(b, "status", None) != StatusBearbeitung.ABGESCHLOSSEN:
+                continue
+
+            dauer = self.bearbeitungszeit(b)
+            if dauer is None:
+                # Keine sinnvolle Dauer -> überspringen
+                continue
+
+            # Datum für Sortierung und Verlauf (Abgabedatum bevorzugt)
+            datum = getattr(b, "abgabe_datum", None) or getattr(
+                b, "start_datum", None
+            )
+            if not datum:
+                # Wenn gar kein Datum da ist, überspringen
+                continue
+
+            daten.append(
+                {
+                    "datum": datum,
+                    "dauer_tage": dauer,
+                }
+            )
+
+        if not daten:
+            # Keine verwertbaren Daten
+            return []
+
+        # 2) Nach Datum sortieren (wie früher nach Abgabedatum)
+        daten.sort(key=lambda d: d["datum"])
+
+        # 3) Laufenden Durchschnitt berechnen
+        verlauf: List[Dict] = []
+        summe = 0
+        count = 0
+
+        for idx, eintrag in enumerate(daten, start=1):
+            summe += eintrag["dauer_tage"]
+            count += 1
+            avg = summe / count
+
+            verlauf.append(
+                {
+                    "index": idx,
+                    "datum": eintrag["datum"],
+                    "avg_dauer_tage": avg,
+                }
+            )
+
+        return verlauf
+
+
+
+
+
+    def berechne_bearbeitungszeit_pro_5ects(
+        self,
+        student_id: int,
+    ) -> Optional[float]:
+        """
+        Berechnet die durchschnittliche Bearbeitungszeit in Tagen pro 5 ECTS
+        für alle abgeschlossenen Bearbeitungen eines Studenten.
+
+        Schritte (wie in deinem Debug-Output):
+        1. Alle Bearbeitungen des Studenten laden
+        2. Nur ABGESCHLOSSENE mit start_datum und abgabe_datum
+        3. Zu jedem Kurs die ECTS holen
+        4. Bearbeitungszeit auf 5 ECTS normieren
+        5. Durchschnitt der normierten Zeiten bilden
+
+        Rückgabe:
+        - float: Durchschnitt in Tagen pro 5 ECTS
+        - None: wenn zu wenig / keine Daten vorhanden sind
+        """
+        # [1] Bearbeitungen laden
+        bearbeitungen: Iterable[Bearbeitung] = self.bearbeitungen_fuer_student(student_id)
+
+        normierte_zeiten: List[float] = []
+
+        for b in bearbeitungen:
+            # [2] Nur abgeschlossene Bearbeitungen
+            if getattr(b, "status", None) != StatusBearbeitung.ABGESCHLOSSEN:
+                continue
+
+            # Start-/Enddatum prüfen
+            start = getattr(b, "start_datum", None)
+            ende = getattr(b, "abgabe_datum", None)
+            if not start or not ende:
+                continue
+
+            # Roh-Bearbeitungszeit in Tagen
+            tage = (ende - start).days
+            if tage < 0:
+                continue
+
+            # [3] Kurs + ECTS holen
+            kurs = self.kurs_by_id(b.kurs_id)
+            if not kurs:
+                continue
+
+            ects = getattr(kurs, "ects", None)
+            if not ects or ects <= 0:
+                continue
+
+            # [4] Normierung auf 5 ECTS
+            faktor = 5.0 / float(ects)
+            norm_zeit = tage * faktor
+
+            normierte_zeiten.append(norm_zeit)
+
+        # [5] Durchschnitt berechnen
+        if not normierte_zeiten:
+            return None
+
+        return sum(normierte_zeiten) / len(normierte_zeiten)
+
+    def berechne_tempo_status(
+        self,
+        student_id: int,
+        ziel_tage_pro_5ects: float = 30.0,
+    ) -> TempoStatus:
+        """
+        Berechnet den Tempo-Status basierend auf:
+        - Ø-Bearbeitungszeit pro 5 ECTS (berechne_bearbeitungszeit_pro_5ects)
+        - Startdatum der Einschreibung
+        - ECTS-Gesamt des Studiengangs
+
+        Prognose-Enddatum = start_datum + (ects_gesamt * tage_pro_ects)
+        """
+
+        # 1) Ø Bearbeitungszeit pro 5 ECTS
+        ist_tage = self.berechne_bearbeitungszeit_pro_5ects(student_id)
+        if ist_tage is None:
+            return TempoStatus(
+                ist_tage_pro_5ects=None,
+                tempo_abweichung=None,
+                prognose_enddatum=None,
+                diff_tage_zum_ziel=None,
+            )
+
+        tempo_abweichung: Optional[float] = ist_tage - ziel_tage_pro_5ects
+
+        # 2) Einschreibung (Start + Ziel-Enddatum)
+        einschreibung = self.aktive_einschreibung(student_id)
+        if not einschreibung or not einschreibung.start_datum:
+            return TempoStatus(
+                ist_tage_pro_5ects=ist_tage,
+                tempo_abweichung=tempo_abweichung,
+                prognose_enddatum=None,
+                diff_tage_zum_ziel=None,
+            )
+
+        start = einschreibung.start_datum
+        ziel_enddatum = einschreibung.ziel_enddatum
+
+        # 3) Studiengang (ECTS gesamt)
+        studiengaenge = self.studiengaenge_by_student_id(student_id)
+        studiengang = studiengaenge[0] if studiengaenge else None
+        ects_gesamt = getattr(studiengang, "ects_gesamt", None)
+
+        if ects_gesamt is None:
+            return TempoStatus(
+                ist_tage_pro_5ects=ist_tage,
+                tempo_abweichung=tempo_abweichung,
+                prognose_enddatum=None,
+                diff_tage_zum_ziel=None,
+            )
+
+        ects_gesamt = float(ects_gesamt)
+
+        # 4) Von Ø-Tagen pro 5 ECTS zu Tagen pro ECTS
+        tage_pro_ects = ist_tage / 5.0
+        total_tage = ects_gesamt * tage_pro_ects
+
+        prognose_enddatum = start + timedelta(days=round(total_tage))
+
+        # 5) Differenz zum Zielabschlussdatum
+        diff_tage_zum_ziel: Optional[int] = None
+        if ziel_enddatum:
+            diff_tage_zum_ziel = (prognose_enddatum - ziel_enddatum).days
+
+        return TempoStatus(
+            ist_tage_pro_5ects=ist_tage,
+            tempo_abweichung=tempo_abweichung,
+            prognose_enddatum=prognose_enddatum,
+            diff_tage_zum_ziel=diff_tage_zum_ziel,
+        )
+
 
 
     # ==================== Prüfungen ====================
@@ -329,7 +585,7 @@ class WorkflowService:
         result = []
         for b in bearbeitungen:
             # Nur Bearbeitungen mit Status eingereicht
-            if b.status != StatusBearbeitung.eingereicht:
+            if b.status != StatusBearbeitung.EINGEREICHT:
                 continue
             
             if not b.abgabe_datum:
@@ -415,6 +671,15 @@ class WorkflowService:
             self._einschreibungen.update(einschreibung)
         
         return True
+    
+
+
+
+
+
+    
+
+
 
     # ==================== Private Hilfsmethoden ====================
 
@@ -444,3 +709,9 @@ class WorkflowService:
             ects_gesamt=ects_gesamt,
         )
         return self._studiengang_repo.create(studiengang)
+
+
+
+
+
+

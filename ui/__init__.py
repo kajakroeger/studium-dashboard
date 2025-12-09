@@ -1,9 +1,8 @@
 """
 ui/__init__.py
-Exportiert die UI-Schnittstelle (UIAdapter) und die Streamlit-Implementierung.
+Exportiert die UI-Schnittstelle (UIAdapter) und die Funktion zum Laden des Renderers.
 """
 
-from .ui_adapter import UIAdapter
-from .streamlit_dashboard_ui import StreamlitDashboardUI
+from .components.ui_adapter import UIAdapter
 
-__all__ = ["UIAdapter", "StreamlitDashboardUI"]
+__all__ = ["UIAdapter", "get_dashboard_renderer"]

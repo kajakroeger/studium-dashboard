@@ -1,101 +1,82 @@
-# ui/components/status_overview_tile.py
+# ui/components/status_uebersicht.py
+# neue Welt ready
 import streamlit as st
 import plotly.graph_objects as go
 from typing import Optional
 
+from core.view_models import StatusUebersichtViewModel
 from .kachel import kachel
 
 
-def render_status_uebersicht(service, student_id: int, studiengang_id: Optional[int] = None) -> None:
-    """Rendert die Status-Übersicht Kachel."""
+def render_status_uebersicht(vm: StatusUebersichtViewModel) -> None:
+    """Rendert die Status-Übersicht Kachel auf Basis des ViewModels."""
     with kachel("STATUS ÜBERSICHT"):
 
-        # --- 1) Ziel-ECTS (ects_gesamt) aus Studiengang holen ---
-        ziel_ects: Optional[float] = None
+        ziel_ects = vm.ects_ziel
+        ects_bestanden = vm.ects_bestanden
+        ects_offen = vm.ects_offen
+        avg_grade = vm.notenschnitt
+        avg_days_per_5ects = vm.bearbeitungszeit_pro_5ects
 
-        # a) Falls eine studiengang_id übergeben ist, diese zuerst versuchen
-        sg = None
-        if studiengang_id is not None:
-            try:
-                sg = service.studiengang_by_id(studiengang_id)
-            except Exception:
-                sg = None
-
-        # b) Fallback: erster Studiengang des Studenten
-        if sg is None:
-            try:
-                studiengaenge = service.studiengaenge_by_student_id(student_id) or []
-            except Exception:
-                studiengaenge = []
-            if studiengaenge:
-                sg = studiengaenge[0]
-
-        if sg is not None:
-            # bevorzugt echtes Feld, nicht "ziel_ects"
-            ziel_ects = sg.ziel_ects
-
-        # --- 2) ECTS (bestanden) holen ---
-        try:
-            ects_raw = service.ects_summe_bestanden(student_id)
-            ects_bestanden = float(ects_raw) if ects_raw is not None else 0.0
-        except Exception:
-            ects_bestanden = None
-
-        # --- 3) Ø Note ---
-        try:
-            avg_grade: Optional[float] = service.berechne_notenschnitt(student_id)
-        except Exception:
-            avg_grade = None
-
-        # --- 4) Bearbeitungszeit ---
-        try:
-            avg_days_per_5ects = service.berechne_bearbeitungszeit(student_id)
-        except Exception:
-            avg_days_per_5ects = None
-
-        # --- 5) ECTS offen ---
-        if ziel_ects is not None and ects_bestanden is not None:
-            ects_offen = max(ziel_ects - ects_bestanden, 0)
-        else:
-            ects_offen = None
-
-        # ---------------------------------------------------------------------
+        # -----------------------------------------------------------------
         # DONUTS
-        # ---------------------------------------------------------------------
+        # -----------------------------------------------------------------
         c1, c2 = st.columns(2)
 
         # Donut 1: Prozent erreicht
         with c1:
-            if ziel_ects is not None and ects_bestanden is not None and ziel_ects > 0:
-                pct = max(0, min((ects_bestanden / ziel_ects) * 100, 100))
+            if ziel_ects and ects_bestanden is not None and ziel_ects > 0:
+                pct = max(0.0, min((ects_bestanden / ziel_ects) * 100.0, 100.0))
                 fig = _donut(percent=pct, center_text=f"{pct:.0f} %")
-                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(
+                    fig,
+                    use_container_width=True,
+                    config={"displayModeBar": False},
+                    key="donut_erreicht",
+                )
                 st.caption(f"{ects_bestanden:.0f} von {ziel_ects:.0f} ECTS erreicht")
             else:
                 fig = _donut_none()
-                st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(
+                    fig,
+                    use_container_width=True,
+                    config={"displayModeBar": False},
+                    key="donut_erreicht_leer",
+                )
                 st.caption("– von – ECTS erreicht")
 
         # Donut 2: ECTS offen
         with c2:
-            if ziel_ects is not None and ects_offen is not None and ziel_ects > 0:
-                pct_offen_raw = (ects_offen / ziel_ects) * 100
-                pct_offen = max(0, min(pct_offen_raw, 100))
+            if ziel_ects and ects_offen is not None and ziel_ects > 0:
+                pct_offen = max(0.0, min((ects_offen / ziel_ects) * 100.0, 100.0))
                 fig2 = _donut(percent=pct_offen, center_text=f"{ects_offen:.0f}")
-                st.plotly_chart(fig2, use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(
+                    fig2,
+                    use_container_width=True,
+                    config={"displayModeBar": False},
+                    key="donut_offen",
+                )
                 st.caption(f"Noch {ects_offen:.0f} ECTS offen")
             else:
                 fig2 = _donut_none()
-                st.plotly_chart(fig2, use_container_width=True, config={"displayModeBar": False})
+                st.plotly_chart(
+                    fig2,
+                    use_container_width=True,
+                    config={"displayModeBar": False},
+                    key="donut_offen_leer",
+                )
                 st.caption("Noch – ECTS offen")
 
-        # ---------------------------------------------------------------------
+        # -----------------------------------------------------------------
         # METRIKEN
-        # ---------------------------------------------------------------------
+        # -----------------------------------------------------------------
         c3, c4 = st.columns(2)
 
         with c3:
-            st.metric("Ø Note", value="—" if avg_grade is None else f"{avg_grade:.2f}")
+            st.metric(
+                "Ø Note",
+                value="—" if avg_grade is None else f"{avg_grade:.2f}",
+            )
 
         with c4:
             st.metric(
@@ -105,8 +86,18 @@ def render_status_uebersicht(service, student_id: int, studiengang_id: Optional[
             )
 
 
-def _donut(percent: float, center_text: str):
-    """Normaler Donut."""
+
+def _donut(percent: float, center_text: str) -> go.Figure:
+    """
+    Erstellt einen Donut-Chart.
+    
+    Args:
+        percent: Prozentsatz (0-100)
+        center_text: Text in der Mitte
+    
+    Returns:
+        Plotly Figure
+    """
     fig = go.Figure(
         data=[
             go.Pie(
@@ -115,19 +106,33 @@ def _donut(percent: float, center_text: str):
                 hole=0.7,
                 textinfo="none",
                 hoverinfo="skip",
+                marker=dict(colors=["#3b82f6", "#1e293b"]),  # Blau + Dunkelgrau
             )
         ]
     )
     fig.update_layout(
         margin=dict(l=0, r=0, t=0, b=0),
         showlegend=False,
-        annotations=[dict(text=center_text, showarrow=False, font=dict(size=20))]
+        annotations=[
+            dict(
+                text=center_text,
+                showarrow=False,
+                font=dict(size=20, color="white")
+            )
+        ],
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
     )
     return fig
 
 
-def _donut_none():
-    """Donut für fehlende Daten: grauer Ring + '-' in der Mitte."""
+def _donut_none() -> go.Figure:
+    """
+    Donut für fehlende Daten: grauer Ring + '—' in der Mitte.
+    
+    Returns:
+        Plotly Figure
+    """
     fig = go.Figure(
         data=[
             go.Pie(
@@ -143,6 +148,14 @@ def _donut_none():
     fig.update_layout(
         margin=dict(l=0, r=0, t=0, b=0),
         showlegend=False,
-        annotations=[dict(text="–", showarrow=False, font=dict(size=22, color="#CCCCCC"))]
+        annotations=[
+            dict(
+                text="—",
+                showarrow=False,
+                font=dict(size=22, color="#CCCCCC")
+            )
+        ],
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
     )
     return fig

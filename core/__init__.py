@@ -5,6 +5,7 @@ Nach außen exportieren wir den FortschrittService und seine DTOs.
 """
 from __future__ import annotations
 from datetime import date
+from typing import Dict, List, Optional
 
 # DTOs für die UI
 from .dtos import (
@@ -82,7 +83,6 @@ class FortschrittService:
 
 
     # ---------------- Studiengang ------------
-    
     def studiengang_by_id(self, studiengang_id: int):
         return self._workflow.studiengang_by_id(studiengang_id)
     
@@ -91,6 +91,9 @@ class FortschrittService:
     
     def studiengaenge_by_student_id(self, student_id: int):
         return self._workflow.studiengaenge_by_student_id(student_id)
+    
+    def absolvierte_ects(self, student_id: int) -> float:
+        return self._workflow.absolvierte_ects(student_id)
     
 
 
@@ -104,7 +107,6 @@ class FortschrittService:
 
 
     # ---------------- Kurse ----------------
-
     def kurse_fuer_student(self, student_id: int):
         return self._workflow.kurse_fuer_student(student_id)
 
@@ -123,21 +125,19 @@ class FortschrittService:
 
     
     # ---------------- Bearbeitungen ----------------
-
     def bearbeitungen_fuer_student(self, student_id: int):
         return self._workflow.bearbeitungen_fuer_student(student_id)
+    
     
 
     
     # ---------------- Prüfungen ----------------
-
     def pruefung_fuer_bearbeitung(self, bearbeitung_id: int):
         return self._workflow.pruefung_fuer_bearbeitung(bearbeitung_id)
     
 
 
     # ---------------- Action Bar Aktionen ------------
-
     def add_kurs_mit_bearbeitung_und_pruefung(self, **kwargs):
         return self._workflow.add_kurs_mit_bearbeitung_und_pruefung(**kwargs)
     
@@ -159,7 +159,6 @@ class FortschrittService:
 
 
     # ---------------- KPIs / Fortschritt ------------
-
     def berechne_notenschnitt(self, student_id: int):
         return self._progress.berechne_notenschnitt(student_id)
 
@@ -169,14 +168,29 @@ class FortschrittService:
     # def gesamtuebersicht(self, student_id: int):
     #     return self._progress.gesamtuebersicht(student_id)
     
-    def berechne_bearbeitungszeit(self, student_id: int) -> int:
-        return self._progress.berechne_bearbeitungszeit(student_id)
+    def bearbeitungszeit(self, student_id: int) -> int:
+        return self._workflow.bearbeitungszeit(student_id)
+    
+    def bearbeitungszeit_durchschnitt(self, student_id: int) -> Optional[float]:
+        return self._workflow.bearbeitungszeit_durchschnitt(student_id)
+    
+    def bearbeitungszeit_durchschnitt_verlauf(self, student_id: int) -> List[Dict]:
+        return self._workflow.bearbeitungszeit_durchschnitt_verlauf(student_id)
     
     def alle_bestandenen_noten(self, student_id: int):
         return self._progress.alle_bestandenen_noten(student_id)
     
     def benoetigte_note_naechster_kurs(self, student_id: int):
         return self._progress.benoetigte_note_naechster_kurs(student_id)
+    
+
+    def berechne_notenziel_status(self, student_id: int):
+        """Berechnet Noten-Ziel-Status."""
+        return self._progress.berechne_notenziel_status(student_id)
+    
+    def berechne_tempo_status(self, student_id: int, ziel_tage_pro_5ects: float = 30.0):
+        """Berechnet Tempo-Status."""
+        return self._workflow.berechne_tempo_status(student_id, ziel_tage_pro_5ects)
     
 
 

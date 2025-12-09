@@ -3,34 +3,28 @@
 Zeigt die Studienziele (Ziel-Abschlussdatum, Ziel-Notenschnitt) an.
 """
 import streamlit as st
+
+from core.view_models import StudienzieleViewModel
 from .kachel import kachel
 
 
-def render_studienziele(service, student_id: int):
+def render_studienziele(vm: StudienzieleViewModel):
     """
     Zeigt die Studienziele aus der aktiven Einschreibung an.
     """
     with kachel("STUDIENZIELE"):
         # Aktive Einschreibung holen
-        try:
-            einschreibung = service.aktive_einschreibung(student_id)
-        except Exception:
-            einschreibung = None
 
-        if not einschreibung:
-            st.info("Keine aktive Einschreibung gefunden.")
+        if not vm.hat_einschreibung:
+            st.info(vm.fehlermeldung)
             return
-
-        # Ziel-Enddatum
-        ziel_enddatum = einschreibung.ziel_enddatum
-        if ziel_enddatum:
-            st.write(f"Ziel Abschlussdatum: {ziel_enddatum.strftime('%d.%m.%Y')}")
+        
+        if vm.ziel_enddatum_str:
+            st.write(f"Ziel Abschlussdatum: {vm.ziel_enddatum_str}")
         else:
-            st.write("Ziel Abschlussdatum: Nicht hinterlegt")
-
-        # Ziel-Notenschnitt
-        ziel_notenschnitt = einschreibung.ziel_notenschnitt
-        if ziel_notenschnitt is not None:
-            st.write(f"Zielnote mindestens: {ziel_notenschnitt:.2f}")
+            st.write(vm.fehlermeldung)
+        if vm.ziel_notenschnitt:
+            st.write(f"Ziel Notenschnitt: {vm.ziel_notenschnitt:.2f}")
         else:
-            st.write("Zielnote mindestens: Nicht hinterlegt")
+            st.write(vm.fehlermeldung)
+

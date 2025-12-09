@@ -7,10 +7,11 @@ OPTIMIERT:
 - Viel kürzere, klarere Methoden
 """
 from __future__ import annotations
+import math
 from typing import List, Optional, Tuple
-from datetime import date
+from datetime import date, timedelta
 
-from models import Bearbeitung, Pruefung
+from core.dtos import NotenZielStatus, TempoStatus
 from models.bearbeitung import StatusBearbeitung
 
 
@@ -181,3 +182,131 @@ class ProgressService:
             required_avg = 1.0
 
         return (round(required_avg, 2), rest_kurse)
+    
+
+
+
+
+    def berechne_notenziel_status(self, student_id: int) -> NotenZielStatus:
+        """
+        Berechnet den kompletten Status für Noten-Ziele.
+        """
+        aktueller_schnitt = self.berechne_notenschnitt(student_id)
+
+        if not self._workflow:
+            return self._empty_notenziel_status()
+
+        einschreibung = self._workflow.aktive_einschreibung(student_id)
+        ziel_note = einschreibung.ziel_notenschnitt if einschreibung else None
+
+        noten = self.alle_bestandenen_noten(student_id)
+        gesamt_noten = sum(noten)
+        anzahl_noten = len(noten)
+
+        studiengaenge = self._workflow.studiengaenge_by_student_id(student_id)
+        studiengang = studiengaenge[0] if studiengaenge else None
+        gesamt_kurse = studiengang.anzahl_kurse if studiengang else None
+
+        rest_kurse: Optional[int] = None
+        if gesamt_kurse is not None:
+            rest_kurse = max(gesamt_kurse - anzahl_noten, 0)
+
+        benoetigte_note_naechster_kurs: Optional[float] = None
+        benoetigter_durchschnitt_rest: Optional[float] = None
+        best_moeglicher_schnitt: Optional[float] = None
+        ziel_erreicht = False
+
+        naechster_besserer_schnitt: Optional[float] = None
+        note_fuer_naechsten_besseren_schnitt: Optional[float] = None
+        note_fuer_minimale_verbesserung: Optional[float] = None
+
+        # --- Standard-Zielnoten-Logik ---
+        if ziel_note is not None and anzahl_noten > 0:
+            # Bester möglicher Schnitt, wenn du im nächsten Kurs 1,0 schreibst
+            best_moeglicher_schnitt = (gesamt_noten + 1.0) / (anzahl_noten + 1)
+
+            # Note, um direkt die Zielnote zu erreichen (falls realistisch)
+            direkte_note = self._note_fuer_ziel_schnitt(
+                gesamt_noten=gesamt_noten,
+                anzahl_noten=anzahl_noten,
+                ziel_schnitt=ziel_note,
+            )
+            benoetigte_note_naechster_kurs = direkte_note  # kann None sein
+
+            # Durchschnitt, der in allen restlichen Kursen nötig wäre
+            if gesamt_kurse is not None and rest_kurse and rest_kurse > 0:
+                required_avg = (ziel_note * gesamt_kurse - gesamt_noten) / rest_kurse
+                if required_avg <= 5.0:
+                    if required_avg < 1.0:
+                        required_avg = 1.0
+                    benoetigter_durchschnitt_rest = round(required_avg, 2)
+
+        # --- Ziel erreicht? ---
+        if aktueller_schnitt is not None and ziel_note is not None:
+            ziel_erreicht = aktueller_schnitt <= ziel_note
+
+        # --- Minimale Note zur Verbesserung des aktuellen Schnitts ---
+        if aktueller_schnitt is not None and anzahl_noten > 0:
+            note_fuer_minimale_verbesserung = self._benoetigte_note_fuer_verbesserung(
+                aktueller_schnitt=aktueller_schnitt
+            )
+
+        return NotenZielStatus(
+            aktueller_schnitt=aktueller_schnitt,
+            ziel_note=ziel_note,
+            benoetigte_note_naechster_kurs=benoetigte_note_naechster_kurs,
+            benoetigter_durchschnitt_rest=benoetigter_durchschnitt_rest,
+            best_moeglicher_schnitt_naechster_kurs=best_moeglicher_schnitt,
+            rest_kurse=rest_kurse,
+            anzahl_noten=anzahl_noten,
+            ziel_erreicht=ziel_erreicht,
+            naechster_besserer_schnitt=naechster_besserer_schnitt,
+            note_fuer_naechsten_besseren_schnitt=note_fuer_naechsten_besseren_schnitt,
+            note_fuer_minimale_verbesserung=note_fuer_minimale_verbesserung,
+        )
+
+    
+    def _note_fuer_ziel_schnitt(
+        self,
+        gesamt_noten: float,
+        anzahl_noten: int,
+        ziel_schnitt: float,
+    ) -> Optional[float]:
+        """
+        Berechnet die benötigte Note im nächsten Kurs für einen gewünschten Durchschnitt.
+        Ergebnis:
+        - auf eine Nachkommastelle gerundet (0.1-Raster)
+        - None, wenn außerhalb des zulässigen Notenbereichs [1.0, 5.0]
+        """
+        # Rohwert berechnen
+        raw = ziel_schnitt * (anzahl_noten + 1) - gesamt_noten
+
+        # Auf 1 Nachkommastelle runden (z. B. 1.234 -> 1.2)
+        needed = round(raw * 10) / 10.0
+
+        # Zulässiger Notenbereich
+        if needed < 1.0 or needed > 5.0:
+            return None
+
+        return needed
+
+
+    def _benoetigte_note_fuer_verbesserung(
+        self,
+        aktueller_schnitt: float,
+    ) -> Optional[float]:
+        """
+        Berechnet die schlechteste Note (mit einer Nachkommastelle),
+        die den aktuellen Schnitt noch VERBESSERT.
+        """
+        base = math.floor(aktueller_schnitt * 10) / 10.0
+
+        if base < aktueller_schnitt:
+            needed = base
+        else:
+            needed = base - 0.1
+
+        if needed < 1.0:
+            return None
+
+        return round(needed, 1)

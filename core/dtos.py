@@ -61,3 +61,33 @@ class ZielStatusDTO:
     # Zeit-Ziel
     prognose_abschluss: Optional[date]
     kommentar_zeit: str
+
+
+@dataclass
+class NotenZielStatus:
+    """Ergebnis der Noten-Ziel-Berechnungen."""
+    aktueller_schnitt: Optional[float]
+    ziel_note: Optional[float]
+    benoetigte_note_naechster_kurs: Optional[float]
+    benoetigter_durchschnitt_rest: Optional[float]
+    best_moeglicher_schnitt_naechster_kurs: Optional[float]
+    rest_kurse: Optional[int]
+    ziel_erreicht: bool
+    anzahl_noten: int
+
+    naechster_besserer_schnitt: Optional[float] = None
+    note_fuer_naechsten_besseren_schnitt: Optional[float] = None
+    note_fuer_minimale_verbesserung: Optional[float] = None
+
+
+@dataclass
+class TempoStatus:
+    """Ergebnis der Tempo-Berechnungen."""
+    ist_tage_pro_5ects: Optional[float]
+    tempo_abweichung: Optional[float]  # positiv = langsamer, negativ = schneller
+    prognose_enddatum: Optional[date] = None
+    diff_tage_zum_ziel: Optional[int] = None
+
+
+
+
