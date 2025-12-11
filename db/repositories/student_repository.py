@@ -7,11 +7,15 @@ Die UI/Services hängen nur von diesem Interface ab – nicht von SQLite.
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Iterable, Optional
+from db.connection_provider import ConnectionProvider
 from models import Student
 
 
 class StudentRepository(ABC):
     """Abstraktes Repository für Studenten."""
+
+    def __init__(self, provider: ConnectionProvider) -> None:
+        self._provider = provider
 
     @abstractmethod
     def get_by_id(self, student_id: int) -> Optional[Student]:

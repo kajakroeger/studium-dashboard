@@ -1,211 +1,250 @@
 # core/progress_service.py
-"""
-OPTIMIERT:
-- Keine _to_date() Helper mehr (Repository liefert garantiert date-Objekte)
-- Keine defensiven getattr()-Checks mehr (Typen sind garantiert)
-- Properties statt repetitiver Helper-Funktionen
-- Viel kürzere, klarere Methoden
-"""
 from __future__ import annotations
-import math
-from typing import List, Optional, Tuple
+from dataclasses import dataclass
 from datetime import date, timedelta
+from typing import Dict, List, Optional
 
-from core.dtos import NotenZielStatus, TempoStatus
+from core.dtos import (
+    BearbeitungszeitenAnalyse, 
+    EctsAnalyse, 
+    NotenAnalyse, 
+    NotenZielStatus, 
+    TempoStatus
+)
+from core.workflow_service import WorkflowService
 from models.bearbeitung import StatusBearbeitung
 
 
 class ProgressService:
     """
     Verantwortlich für:
-    - KPI-Berechnungen (ECTS, Notenschnitt, Bearbeitungszeit)
-    - Aggregationen (alle Noten, Verlauf der Bearbeitungszeiten)
-    - Read-Only Operationen (keine Statusänderungen)
+    - Analysen über Noten
+    - Analysen über ECTS-Fortschritt
+    - Analysen über Bearbeitungszeiten
+    - zusammengesetzte Ziel-Status (NotenZielStatus, TempoStatus)
     """
 
-    def __init__(
-        self,
-        *,
-        student_repo,
-        bearbeitung_repo,
-        kurs_repo,
-        pruefung_repo,
-        einschreibung_repo,
-    ) -> None:
-        self._students = student_repo
-        self._bearb = bearbeitung_repo
-        self._kurse = kurs_repo
-        self._pruef = pruefung_repo
-        self._einschreibungen = einschreibung_repo
-        self._workflow = None  # wird später gesetzt
+    def __init__(self, workflow: WorkflowService) -> None:
+        self._wf = workflow
 
-    def set_workflow(self, workflow) -> None:
-        """Wird vom FortschrittService nachträglich aufgerufen."""
-        self._workflow = workflow
-
-
-    # ==================== Noten ====================
+    # ---------------------------------------------------------------------
+    # Hilfsfunktionen
+    # ---------------------------------------------------------------------
 
     def alle_bestandenen_noten(self, student_id: int) -> List[float]:
-        """
-        VEREINFACHT (von 50 → 15 Zeilen):
-        Gibt alle Noten aus bestandenen Prüfungen zurück.
-        """
-        if not self._workflow:
-            return []
-
-        bearbeitungen = self._workflow.bearbeitungen_fuer_student(student_id)
-        noten = []
-
-        for b in bearbeitungen:
-            pruefung = self._pruef.get_by_bearbeitung_id(b.id)
-            
-            # Typsicher: pruefung.bestanden ist garantiert bool oder None
-            if pruefung and pruefung.bestanden and pruefung.note is not None:
-                noten.append(float(pruefung.note))
-
+        """Holt alle Noten der bestandenen Prüfungen."""
+        noten: List[float] = []
+        for ab in self._wf.abgeschlossene_bearbeitungen(student_id):
+            if not ab.pruefung:
+                continue
+            if not getattr(ab.pruefung, "bestanden", False):
+                continue
+            if ab.pruefung.note is None:
+                continue
+            noten.append(float(ab.pruefung.note))
         return noten
 
+    # ---------------------------------------------------------------------
+    # Noten-Analyse
+    # ---------------------------------------------------------------------
+
+    def noten_analyse(self, student_id: int) -> NotenAnalyse:
+        """
+        Fasst alle Noteninfos zusammen:
+        - aktueller Schnitt
+        - beste Note
+        - Anzahl Noten
+        - Liste der Noten
+        """
+        noten = self.alle_bestandenen_noten(student_id)
+
+        if not noten:
+            return NotenAnalyse(
+                aktueller_schnitt=None,
+                beste_note=None,
+                anzahl_noten=0,
+                noten_liste=[],
+            )
+
+        aktueller_schnitt = round(sum(noten) / len(noten), 2)
+        beste = min(noten)
+
+        return NotenAnalyse(
+            aktueller_schnitt=aktueller_schnitt,
+            beste_note=beste,
+            anzahl_noten=len(noten),
+            noten_liste=noten,
+        )
+
     def berechne_notenschnitt(self, student_id: int) -> Optional[float]:
-        """Berechnet den Notenschnitt aller bestandenen Prüfungen."""
-        noten = self.alle_bestandenen_noten(student_id)
-        
-        if not noten:
-            return None
-        
-        return round(sum(noten) / len(noten), 2)
+        """Kompatible Kurzform für bisherigen Code."""
+        return self.noten_analyse(student_id).aktueller_schnitt
 
-    def benoetigte_note_naechster_kurs(self, student_id: int) -> Optional[float]:
+    # ---------------------------------------------------------------------
+    # ECTS-Analyse
+    # ---------------------------------------------------------------------
+
+    def ects_analyse(self, student_id: int) -> EctsAnalyse:
+        """Analysiert den ECTS-Fortschritt."""
+        # 1) ECTS-Gesamt aus Studiengang
+        studiengaenge = self._wf.studiengaenge_by_student_id(student_id)
+        sg = studiengaenge[0] if studiengaenge else None
+        ects_gesamt: Optional[float] = None
+        if sg and getattr(sg, "ects_gesamt", None) is not None:
+            ects_gesamt = float(sg.ects_gesamt)
+
+        # 2) ECTS aus abgeschlossenen Kursen
+        ects_bestanden = 0.0
+        for ab in self._wf.abgeschlossene_bearbeitungen(student_id):
+            if not ab.kurs or not getattr(ab.kurs, "ects", None):
+                continue
+            ects_bestanden += float(ab.kurs.ects)
+
+        # 3) Offen & Prozent
+        ects_offen: Optional[float] = None
+        ects_prozent: Optional[float] = None
+        if ects_gesamt is not None:
+            ects_offen = max(ects_gesamt - ects_bestanden, 0.0)
+            if ects_gesamt > 0:
+                ects_prozent = min(
+                    max(ects_bestanden / ects_gesamt * 100.0, 0.0),
+                    100.0,
+                )
+
+        return EctsAnalyse(
+            ects_gesamt=ects_gesamt,
+            ects_bestanden=ects_bestanden,
+            ects_offen=ects_offen,
+            ects_prozent=ects_prozent,
+        )
+
+    def ects_summe_bestanden(self, student_id: int) -> float:
+        """Kompatible Kurzform für bisherigen Code."""
+        return self.ects_analyse(student_id).ects_bestanden
+
+    # ---------------------------------------------------------------------
+    # Bearbeitungszeiten-Analyse
+    # ---------------------------------------------------------------------
+
+    def bearbeitungszeiten_analyse(
+        self,
+        student_id: int,
+        normierung_ects: float = 5.0
+    ) -> BearbeitungszeitenAnalyse:
         """
-        Berechnet die Note, die im nächsten Kurs nötig ist,
-        um die Zielnote zu erreichen.
+        ✅ FIXED: Gibt jetzt BearbeitungszeitenAnalyse-Objekt zurück!
         
-        Returns:
-            - Note [1.0, 5.0] wenn erreichbar
-            - 1.0 wenn bereits besser als Ziel
-            - None wenn mit einem Kurs nicht mehr erreichbar
+        Zentrale Analyse aller Bearbeitungszeiten.
+        Liefert:
+        - durchschnitt_tage
+        - normiert_pro_5ects
+        - verlauf (Timeline)
+        - anzahl_kurse
+        - erreichte_ects (für Tempo-Prognose)
+        - verbleibende_ects
         """
-        # Zielnote aus aktiver Einschreibung
-        einschreibung = self._workflow.aktive_einschreibung(student_id)
-        if not einschreibung or not einschreibung.ziel_notenschnitt:
-            return None
+        bearbeitungen = self._wf.bearbeitungen_fuer_student(student_id)
 
-        ziel = einschreibung.ziel_notenschnitt
-        noten = self.alle_bestandenen_noten(student_id)
-        
-        if not noten:
-            return None
-
-        # Formel: (summe + required) / (n + 1) = ziel
-        summe = sum(noten)
-        n = len(noten)
-        required = ziel * (n + 1) - summe
-
-        if required <= 1.0:
-            return 1.0  # Ziel bereits erreicht/übererfüllt
-        if required > 5.0:
-            return None  # Mit einem Kurs nicht mehr machbar
-        
-        return round(required, 2)
-    
-
-
-
-    # ==================== ECTS ====================
-
-    def ects_summe_bestanden(self, student_id: int) -> int:
-        """Summe der ECTS für bestandene Prüfungen."""
-        bearbeitungen = self._bearb.list_by_student(student_id)
-        total = 0
-
+        daten = []
         for b in bearbeitungen:
-            pruefung = self._pruef.get_by_bearbeitung_id(b.id)
-            
-            if pruefung and pruefung.bestanden:
-                kurs = self._kurse.get_by_id(b.kurs_id)
-                if kurs:
-                    total += kurs.ects
+            if b.status != StatusBearbeitung.ABGESCHLOSSEN:
+                continue
 
-        return total
+            tage = self._wf.bearbeitungszeit_in_tagen(b)
+            if tage is None:
+                continue
 
-    # ==================== Bearbeitungszeiten ====================
+            kurs = self._wf.kurs_by_id(b.kurs_id)
+            if not kurs or not kurs.ects:
+                continue
 
-    
+            daten.append({
+                "tage": tage,
+                "ects": kurs.ects,
+                "datum": b.abgabe_datum or b.start_datum,
+            })
 
-    # ==================== Ziele ====================
+        if not daten:
+            return BearbeitungszeitenAnalyse(
+                durchschnitt_tage=None,
+                normiert_pro_5ects=None,
+                verlauf=[],
+                anzahl_kurse=0,
+                erreichte_ects=0.0,
+                verbleibende_ects=None,
+            )
 
-    def benoetigter_durchschnitt_restliche_kurse(
-        self, student_id: int
-    ) -> Optional[Tuple[float, int]]:
-        """
-        Berechnet den nötigen Durchschnitt in den restlichen Kursen,
-        um die Zielnote zu erreichen.
+        # Durchschnitt (roh)
+        durchschnitt = sum(d["tage"] for d in daten) / len(daten)
+
+        # Normiert auf 5 ECTS
+        normierte_zeiten = [
+            d["tage"] * (normierung_ects / d["ects"])
+            for d in daten
+        ]
+        normiert = sum(normierte_zeiten) / len(normierte_zeiten)
+
+        # Verlauf
+        daten.sort(key=lambda d: d["datum"])
+        verlauf = []
+        summe = 0.0
+        for idx, d in enumerate(daten, 1):
+            summe += d["tage"]
+            verlauf.append({
+                "index": idx,
+                "datum": d["datum"],
+                "avg_dauer_tage": summe / idx,
+            })
+
+        # ✅ ECTS berechnen
+        erreichte_ects = sum(d["ects"] for d in daten)
         
-        Returns:
-            (required_avg, rest_kurse) oder None
+        # Verbleibende ECTS
+        studiengaenge = self._wf.studiengaenge_by_student_id(student_id)
+        sg = studiengaenge[0] if studiengaenge else None
+        ects_gesamt = float(getattr(sg, "ects_gesamt", 0) or 0.0)
+        verbleibende_ects = max(ects_gesamt - erreichte_ects, 0.0) if ects_gesamt > 0 else None
+
+        return BearbeitungszeitenAnalyse(
+            durchschnitt_tage=round(durchschnitt, 1),
+            normiert_pro_5ects=round(normiert, 1),
+            verlauf=verlauf,
+            anzahl_kurse=len(daten),
+            erreichte_ects=erreichte_ects,
+            verbleibende_ects=verbleibende_ects,
+        )
+
+    # ---------------------------------------------------------------------
+    # Notenziel-Status (für Studienziele-Kachel)
+    # ---------------------------------------------------------------------
+
+    def berechne_notenziel_status(
+        self,
+        student_id: int,
+        noten_analyse: Optional[NotenAnalyse] = None,  # ✅ Cache-Support
+    ) -> NotenZielStatus:
         """
-        # Zielnote holen
-        einschreibung = self._workflow.aktive_einschreibung(student_id)
-        if not einschreibung or not einschreibung.ziel_notenschnitt:
-            return None
-
-        ziel = einschreibung.ziel_notenschnitt
-
-        # Bisherige Noten
-        noten = self.alle_bestandenen_noten(student_id)
-        summe_bisher = sum(noten)
-        n_bisher = len(noten)
-
-        # Studiengang
-        studiengaenge = self._workflow.studiengaenge_by_student_id(student_id)
-        if not studiengaenge:
-            return None
-
-        studiengang = studiengaenge[0]
-        gesamt_kurse = studiengang.anzahl_kurse
+        Berechnet alle Infos rund um Notenziele für die Studienziele-Kachel.
         
-        if not gesamt_kurse:
-            return None
-
-        # Restliche Kurse
-        rest_kurse = gesamt_kurse - n_bisher
-        if rest_kurse <= 0:
-            return None
-
-        # Formel: (summe_bisher + rest_kurse * x) / gesamt_kurse = ziel
-        required_avg = (ziel * gesamt_kurse - summe_bisher) / rest_kurse
-
-        if required_avg > 5.0:
-            return None  # Nicht mehr erreichbar
+        Args:
+            student_id: ID des Studenten
+            noten_analyse: Optional gecachte Notenanalyse (Performance)
+        """
+        # Noten-Daten (aus Cache oder neu berechnen)
+        if noten_analyse is None:
+            noten_analyse = self.noten_analyse(student_id)
         
-        if required_avg < 1.0:
-            required_avg = 1.0
+        aktueller_schnitt = noten_analyse.aktueller_schnitt
+        noten = noten_analyse.noten_liste
+        anzahl_noten = noten_analyse.anzahl_noten
 
-        return (round(required_avg, 2), rest_kurse)
-    
-
-
-
-
-    def berechne_notenziel_status(self, student_id: int) -> NotenZielStatus:
-        """
-        Berechnet den kompletten Status für Noten-Ziele.
-        """
-        aktueller_schnitt = self.berechne_notenschnitt(student_id)
-
-        if not self._workflow:
-            return self._empty_notenziel_status()
-
-        einschreibung = self._workflow.aktive_einschreibung(student_id)
+        einschreibung = self._wf.aktive_einschreibung(student_id)
         ziel_note = einschreibung.ziel_notenschnitt if einschreibung else None
 
-        noten = self.alle_bestandenen_noten(student_id)
-        gesamt_noten = sum(noten)
-        anzahl_noten = len(noten)
-
-        studiengaenge = self._workflow.studiengaenge_by_student_id(student_id)
-        studiengang = studiengaenge[0] if studiengaenge else None
-        gesamt_kurse = studiengang.anzahl_kurse if studiengang else None
+        # Studiengang für anzahl_kurse
+        studiengaenge = self._wf.studiengaenge_by_student_id(student_id)
+        sg = studiengaenge[0] if studiengaenge else None
+        gesamt_kurse = sg.anzahl_kurse if sg else None
 
         rest_kurse: Optional[int] = None
         if gesamt_kurse is not None:
@@ -215,25 +254,22 @@ class ProgressService:
         benoetigter_durchschnitt_rest: Optional[float] = None
         best_moeglicher_schnitt: Optional[float] = None
         ziel_erreicht = False
-
-        naechster_besserer_schnitt: Optional[float] = None
-        note_fuer_naechsten_besseren_schnitt: Optional[float] = None
         note_fuer_minimale_verbesserung: Optional[float] = None
+        naechster_besserer_schnitt: Optional[float] = None
 
-        # --- Standard-Zielnoten-Logik ---
         if ziel_note is not None and anzahl_noten > 0:
-            # Bester möglicher Schnitt, wenn du im nächsten Kurs 1,0 schreibst
+            gesamt_noten = sum(noten)
             best_moeglicher_schnitt = (gesamt_noten + 1.0) / (anzahl_noten + 1)
 
-            # Note, um direkt die Zielnote zu erreichen (falls realistisch)
+            # Note, um direkt die Zielnote zu erreichen
             direkte_note = self._note_fuer_ziel_schnitt(
                 gesamt_noten=gesamt_noten,
                 anzahl_noten=anzahl_noten,
                 ziel_schnitt=ziel_note,
             )
-            benoetigte_note_naechster_kurs = direkte_note  # kann None sein
+            benoetigte_note_naechster_kurs = direkte_note
 
-            # Durchschnitt, der in allen restlichen Kursen nötig wäre
+            # Durchschnitt in restlichen Kursen
             if gesamt_kurse is not None and rest_kurse and rest_kurse > 0:
                 required_avg = (ziel_note * gesamt_kurse - gesamt_noten) / rest_kurse
                 if required_avg <= 5.0:
@@ -241,15 +277,16 @@ class ProgressService:
                         required_avg = 1.0
                     benoetigter_durchschnitt_rest = round(required_avg, 2)
 
-        # --- Ziel erreicht? ---
+        # Ziel erreicht?
         if aktueller_schnitt is not None and ziel_note is not None:
             ziel_erreicht = aktueller_schnitt <= ziel_note
 
-        # --- Minimale Note zur Verbesserung des aktuellen Schnitts ---
+        # Minimale Note zur Verbesserung
         if aktueller_schnitt is not None and anzahl_noten > 0:
             note_fuer_minimale_verbesserung = self._benoetigte_note_fuer_verbesserung(
                 aktueller_schnitt=aktueller_schnitt
             )
+            naechster_besserer_schnitt = round(aktueller_schnitt - 0.1, 1)
 
         return NotenZielStatus(
             aktueller_schnitt=aktueller_schnitt,
@@ -261,52 +298,102 @@ class ProgressService:
             anzahl_noten=anzahl_noten,
             ziel_erreicht=ziel_erreicht,
             naechster_besserer_schnitt=naechster_besserer_schnitt,
-            note_fuer_naechsten_besseren_schnitt=note_fuer_naechsten_besseren_schnitt,
             note_fuer_minimale_verbesserung=note_fuer_minimale_verbesserung,
         )
 
-    
     def _note_fuer_ziel_schnitt(
         self,
+        *,
         gesamt_noten: float,
         anzahl_noten: int,
         ziel_schnitt: float,
     ) -> Optional[float]:
-        """
-        Berechnet die benötigte Note im nächsten Kurs für einen gewünschten Durchschnitt.
-        Ergebnis:
-        - auf eine Nachkommastelle gerundet (0.1-Raster)
-        - None, wenn außerhalb des zulässigen Notenbereichs [1.0, 5.0]
-        """
-        # Rohwert berechnen
+        """Berechnet die Note für den Zielschnitt."""
         raw = ziel_schnitt * (anzahl_noten + 1) - gesamt_noten
-
-        # Auf 1 Nachkommastelle runden (z. B. 1.234 -> 1.2)
         needed = round(raw * 10) / 10.0
-
-        # Zulässiger Notenbereich
         if needed < 1.0 or needed > 5.0:
             return None
-
         return needed
-
 
     def _benoetigte_note_fuer_verbesserung(
         self,
+        *,
         aktueller_schnitt: float,
     ) -> Optional[float]:
-        """
-        Berechnet die schlechteste Note (mit einer Nachkommastelle),
-        die den aktuellen Schnitt noch VERBESSERT.
-        """
-        base = math.floor(aktueller_schnitt * 10) / 10.0
+        """Berechnet Note für Verbesserung."""
+        ziel = max(1.0, round(aktueller_schnitt - 0.1, 1))
+        return ziel
 
-        if base < aktueller_schnitt:
-            needed = base
+    # ---------------------------------------------------------------------
+    # Tempo-Status (für Studienziele)
+    # ---------------------------------------------------------------------
+
+    def berechne_tempo_status(
+        self,
+        student_id: int,
+        ziel_tage_pro_5ects: float = 30.0,
+        analyse: Optional[BearbeitungszeitenAnalyse] = None,  # ✅ Cache-Support
+    ) -> TempoStatus:
+        """
+        ✅ FIXED: Nutzt jetzt BearbeitungszeitenAnalyse-Objekt!
+        
+        Args:
+            student_id: ID des Studenten
+            ziel_tage_pro_5ects: Ziel-Tempo
+            analyse: Optional gecachte Bearbeitungsanalyse (Performance)
+        """
+        # Analyse aus Cache oder neu berechnen
+        if analyse is None:
+            analyse = self.bearbeitungszeiten_analyse(student_id, normierung_ects=5.0)
+
+        ist_tage = analyse.normiert_pro_5ects
+        tempo_abweichung: Optional[float] = None
+        if ist_tage is not None:
+            tempo_abweichung = ist_tage - ziel_tage_pro_5ects
+
+        einschreibung = self._wf.aktive_einschreibung(student_id)
+        
+        if not einschreibung or not einschreibung.start_datum:
+            return TempoStatus(
+                ist_tage_pro_5ects=ist_tage,
+                ziel_tage_pro_5ects=ziel_tage_pro_5ects,
+                tempo_abweichung=tempo_abweichung,
+                prognose_enddatum=None,
+                diff_tage_zum_ziel=None,
+            )
+
+        start = einschreibung.start_datum
+        ziel_enddatum = einschreibung.ziel_enddatum
+
+        # ✅ FIXED: Nutzt analyse.erreichte_ects aus Objekt
+        if analyse.erreichte_ects <= 0 or analyse.verbleibende_ects is None:
+            return TempoStatus(
+                ist_tage_pro_5ects=ist_tage,
+                ziel_tage_pro_5ects=ziel_tage_pro_5ects,
+                tempo_abweichung=tempo_abweichung,
+                prognose_enddatum=None,
+                diff_tage_zum_ziel=None,
+            )
+
+        # ECTS pro Tag
+        heute = date.today()
+        tage_vergangen = max((heute - start).days, 1)
+        ects_pro_tag = analyse.erreichte_ects / tage_vergangen
+
+        if ects_pro_tag <= 0 or analyse.verbleibende_ects == 0.0:
+            prognose_enddatum = heute
         else:
-            needed = base - 0.1
+            rest_tage = analyse.verbleibende_ects / ects_pro_tag
+            prognose_enddatum = heute + timedelta(days=round(rest_tage))
 
-        if needed < 1.0:
-            return None
+        diff_tage: Optional[int] = None
+        if ziel_enddatum:
+            diff_tage = (prognose_enddatum - ziel_enddatum).days
 
-        return round(needed, 1)
+        return TempoStatus(
+            ist_tage_pro_5ects=ist_tage,
+            ziel_tage_pro_5ects=ziel_tage_pro_5ects,
+            tempo_abweichung=tempo_abweichung,
+            prognose_enddatum=prognose_enddatum,
+            diff_tage_zum_ziel=diff_tage,
+        )

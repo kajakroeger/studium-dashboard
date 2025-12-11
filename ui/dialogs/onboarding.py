@@ -7,13 +7,13 @@ Zweistufiges Onboarding:
 from __future__ import annotations
 import streamlit as st
 from datetime import date
-from core import FortschrittService
+from core import ProgressService
 
 def _init_state() -> None:
     st.session_state.setdefault("onb_step", 1)
     st.session_state.setdefault("onb_form", {})  # sammelt Daten zwischendurch
 
-def _step1(service: FortschrittService) -> None:
+def _step1(service: ProgressService) -> None:
     st.subheader("Schritt 1/2 – Deine Daten & Studienziele")
     with st.form("onb_step1"):
         name = st.text_input("Username *")
@@ -35,7 +35,7 @@ def _step1(service: FortschrittService) -> None:
             st.session_state.onb_step = 2
             st.rerun()
 
-def _step2(service: FortschrittService) -> None:
+def _step2(service: ProgressService) -> None:
     st.subheader("Schritt 2/2 – Dein Studiengang")
     with st.form("onb_step2"):
         sg_name = st.text_input("Studiengang-Name *", placeholder="z. B. B.Sc. Softwareentwicklung")
@@ -73,7 +73,7 @@ def _step2(service: FortschrittService) -> None:
             except Exception as ex:
                 st.error(f"Fehler beim Anlegen: {ex}")
 
-def show_onboarding_dialog(service: FortschrittService) -> None:
+def show_onboarding_dialog(service: ProgressService) -> None:
     _init_state()
     if hasattr(st, "modal"):
         with st.modal("Willkommen 👋 – Lass uns starten!"):

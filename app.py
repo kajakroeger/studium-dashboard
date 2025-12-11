@@ -15,17 +15,15 @@ from ui.theming import apply_global_theme
 UI_BACKEND = "streamlit"
 
 def main() -> None:
-    # Backend bauen (DB, Repos, Service)
-    service = build_service("studium.db")
 
-    # ViewModel-Builder initialisieren
-    vm_builder = ViewModelBuilder(service)
-
+    # Service + ViewModelBuilder initialisieren
+    vm_builder = build_service("studium.db")
+    
     # Renderer holen 
     renderer = get_dashboard_renderer(UI_BACKEND)
-    
+
     # Dashboard rendern
-    renderer(service, vm_builder)
+    renderer(vm_builder)
     
     # apply_global_theme()
 

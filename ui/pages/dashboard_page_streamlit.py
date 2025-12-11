@@ -5,9 +5,10 @@ Orchestriert die Dashboard-Seite: lädt den (einzigen) Studenten, Studiengang et
 from typing import Optional
 import streamlit as st
 
+from core import get_workflow_service
+
 from core.viewmodel_builder import ViewModelBuilder
-from debug_script import debug_bearbeitungszeit_detailliert
-from models.bearbeitung import StatusBearbeitung
+from core.workflow_service import WorkflowService
 from ui.components.action_bar import render_action_bar
 from ui.components.debug_info import render_debug_info
 
@@ -21,11 +22,13 @@ from ui.components.notenverlauf import render_notenverlauf
 from ui.components.bearbeitungsverlauf import render_bearbeitungsverlauf
 
 
-def render_dashboard_streamlit(service, vm_builder: ViewModelBuilder) -> None:
+def render_dashboard_streamlit(vm_builder: ViewModelBuilder) -> None:
     """
     Rendert das Dashboard für genau einen Studenten.
     In dieser Version wird immer der erste vorhandene Student verwendet.
     """
+    workflow = get_workflow_service()
+
     st.set_page_config(
         page_title="Studium Dashboard",
         page_icon="🎓",
@@ -35,14 +38,14 @@ def render_dashboard_streamlit(service, vm_builder: ViewModelBuilder) -> None:
 
     # 1) Studierende über den Service holen
     try:
-        students = service.student_all()
+        students = workflow.student_all()
     except Exception as e:
         st.error(f"Fehler beim Laden der Studenten: {e}")
-        raise 
+        return 
 
     if not students:
         from ui.dialogs.onboarding import show_onboarding_dialog
-        show_onboarding_dialog(service)
+        show_onboarding_dialog(workflow)
         st.info("Bitte lege zuerst einen Studenten an.")
         return
 
@@ -63,96 +66,71 @@ def render_dashboard_streamlit(service, vm_builder: ViewModelBuilder) -> None:
     st.caption(f"Aktueller Student: {student_name}")
     
     # 3) Studiengang auswählen/ermitteln
-    studiengang_id = _select_studiengang(service, student_id)
+    studiengang_id = _select_studiengang(workflow, student_id)
 
     # Wichtig: Dashboard trotzdem anzeigen, auch wenn (noch) kein Studiengang vorhanden ist
     if not studiengang_id:
-        st.warning(
-            "⚠️ Kein aktiver Studiengang gefunden. "
-            "Bitte lege zuerst einen Studiengang an."
-        )
+        st.info("Sobald ein Studiengang angelegt ist, werden hier alle Kacheln aktiviert.")
+        return
+
 
     # 4) Action-Bar (Buttons) – braucht nur den Service + student_id
-    render_action_bar(service, student_id)
+    render_action_bar(workflow, student_id)
 
     # 5) Debug – nur wenn IDs sicher gesetzt sind
-    render_debug_info(service, student_id)
+    render_debug_info(workflow, student_id)
 
     # 1. Zeile: Studienziele und Status
-    if studiengang_id:
-        left, right = st.columns(2, gap="large")
-        with left:
-            studienziele_vm = vm_builder.build_studienziele(student_id, studiengang_id)
-            render_studienziele(studienziele_vm)
-        with right:
-            studienziele_status_vm = vm_builder.build_studienziele_status(student_id, ziel_tage_pro_5ects=30.0)
-            render_studienziele_status(studienziele_status_vm)
-    else:
-        st.info("Studienziele werden angezeigt, sobald ein Studiengang angelegt ist.")
+    left, right = st.columns(2, gap="large")
+    with left:
+        studienziele_vm = vm_builder.build_studienziele(student_id, studiengang_id)
+        render_studienziele(studienziele_vm)
+    with right:
+        studienziele_status_vm = vm_builder.build_studienziele_status(student_id, ziel_tage_pro_5ects=30.0)
+        render_studienziele_status(studienziele_status_vm)
 
     # 2. Zeile: Status-Übersicht und Burndown Chart
     row2_left, row2_right = st.columns(2, gap="large")
     with row2_left:
-        if studiengang_id:
-            status_uebersicht_vm = vm_builder.build_status_uebersicht(student_id, studiengang_id)
-            render_status_uebersicht(status_uebersicht_vm)
-        else:
-            st.info(
-                "Status-Übersicht wird angezeigt, sobald ein Studiengang angelegt ist."
-            )
+        status_uebersicht_vm = vm_builder.build_status_uebersicht(student_id, studiengang_id)
+        render_status_uebersicht(status_uebersicht_vm)
     with row2_right:
-        if studiengang_id:
-            burndown_chart_vm = vm_builder.build_burndown_chart(student_id, studiengang_id)
-            render_burndown_chart(burndown_chart_vm)
-        else:
-            st.info(
-                "Burndown Chart wird angezeigt, sobald ein Studiengang angelegt ist."
-            )
+        burndown_chart_vm = vm_builder.build_burndown_chart(student_id, studiengang_id)
+        render_burndown_chart(burndown_chart_vm)
 
     # 3. Zeile: Notenverlauf und Bearbeitungsverlauf
     row3_left, row3_right = st.columns(2, gap="large")
     with row3_left:
-        if studiengang_id:
-            notenverlauf_vm = vm_builder.build_notenverlauf(student_id, studiengang_id)
-            render_notenverlauf(notenverlauf_vm)
-        else:
-            st.info(
-                "Notenverlauf wird angezeigt, sobald ein Studiengang angelegt ist."
-            )
+        notenverlauf_vm = vm_builder.build_notenverlauf(student_id, studiengang_id)
+        render_notenverlauf(notenverlauf_vm)
+
     with row3_right:
-        if studiengang_id:
-            bearbeitungsverlauf_vm = vm_builder.build_bearbeitungsverlauf(student_id, studiengang_id)
-            render_bearbeitungsverlauf(bearbeitungsverlauf_vm)
-        else:
-            st.info(
-                "Bearbeitungsverlauf wird angezeigt, sobald ein Studiengang angelegt ist."
-            )
+        bearbeitungsverlauf_vm = vm_builder.build_bearbeitungsverlauf(student_id, studiengang_id)
+        render_bearbeitungsverlauf(bearbeitungsverlauf_vm)
 
     # 4. Zeile: Kursplan
-    if studiengang_id:
         kursplan_vm = vm_builder.build_kursplan(student_id, studiengang_id)
         render_kursplan_gantt(kursplan_vm)
-    else:
-        st.info(
-            "Kursplan wird angezeigt, sobald ein Studiengang angelegt ist."
-        )
 
 
-def _select_studiengang(service, student_id: int) -> Optional[int]:
+
+def _select_studiengang(service: WorkflowService, student_id: int) -> Optional[int]:
     """
     Wählt den aktiven Studiengang oder – falls mehrere Einschreibungen bestehen –
     einen passenden Studiengang. Speichert die Auswahl zusätzlich in
     st.session_state["studiengang_id"].
     """
+    workflow = get_workflow_service()
+
     try:
-        einschreibungen = service.einschreibungen_fuer_student(student_id)
+        einschreibungen = workflow.einschreibungen_fuer_student(student_id)
     except Exception as ex:
         st.error(f"Fehler beim Laden der Einschreibungen: {ex}")
         return None
+
     if not einschreibungen:
         return None
 
-    # Nur aktive Einschreibungen filtern (falls Status gesetzt)
     aktive = [e for e in einschreibungen if e.ist_aktiv]
     auswahl = aktive if aktive else einschreibungen
 
@@ -161,39 +139,23 @@ def _select_studiengang(service, student_id: int) -> Optional[int]:
 
     for e in auswahl:
         sg_id = e.studiengang_id
-        sg = service.studiengang_by_id(sg_id)
-        if sg is not None:
-            name = sg.name
-        else:
-            name = f"Studiengang #{sg_id}"
+        sg = workflow.studiengang_by_id(sg_id)
+        name = sg.name if sg is not None else f"Studiengang #{sg_id}"
         labels.append(name)
         ids.append(sg_id)
 
     if not ids:
         return None
-        
+
     if len(ids) == 1:
         chosen = ids[0]
     else:
         idx = st.selectbox(
             "Studiengang",
             list(range(len(ids))),
-            format_func=lambda i: labels[i]
+            format_func=lambda i: labels[i],
         )
         chosen = ids[idx]
 
     st.session_state["studiengang_id"] = chosen
     return chosen
-    
-    
-    # TODO: Hier kann ein Dropdown angeboten werden, um den Studiengang zu wählen 
-    # else:
-    #     idx = st.selectbox(
-    #         "Studiengang",
-    #         list(range(len(ids))),
-    #         format_func=lambda i: labels[i]
-    #     )
-    #     chosen = ids[idx]
-
-    # st.session_state["studiengang_id"] = chosen
-    # return chosen

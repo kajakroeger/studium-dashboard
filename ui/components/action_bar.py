@@ -5,7 +5,7 @@ from datetime import date
 import sqlite3
 from typing import Optional
 import streamlit as st
-from core import FortschrittService
+from core import ProgressService
 from db.repositories.student_repository import StudentRepository
 from models.pruefung import Pruefungsform
 
@@ -13,7 +13,7 @@ from models.pruefung import Pruefungsform
 # =================== DIALOG-FUNKTIONEN ===================
 
 @st.dialog("Kurs hinzufügen")
-def add_kurs_dialog(service: FortschrittService, student_id: Optional[int]):
+def add_kurs_dialog(service: ProgressService, student_id: Optional[int]):
     """Dialog zum Hinzufügen eines neuen Kurses."""
     st.caption("📘 Neuen Kurs anlegen")
     st.write(f"Student-ID: '{student_id}'")
@@ -86,7 +86,7 @@ def add_kurs_dialog(service: FortschrittService, student_id: Optional[int]):
 
 
 @st.dialog("Kurs starten")
-def start_kurs_dialog(service: FortschrittService, current_student_id: Optional[int]):
+def start_kurs_dialog(service: ProgressService, current_student_id: Optional[int]):
     """
     Dialog zum Starten eines Kurses.
     Es werden nur Bearbeitungen ohne start_datum und nicht 'abgeschlossen' angezeigt.
@@ -163,7 +163,7 @@ def start_kurs_dialog(service: FortschrittService, current_student_id: Optional[
 
 
 @st.dialog("Prüfung abgeben")
-def submit_pruefung_dialog(service: FortschrittService, student_id: Optional[int]):
+def submit_pruefung_dialog(service: ProgressService, student_id: Optional[int]):
     """Dialog zum Abgeben einer Prüfung."""
     st.caption("📝 Kurs wählen und Abgabedatum setzen")
     
@@ -224,7 +224,7 @@ def submit_pruefung_dialog(service: FortschrittService, student_id: Optional[int
 
 
 @st.dialog("Bewertung eintragen")
-def add_bewertung_dialog(service: FortschrittService, current_student_id: Optional[int]):
+def add_bewertung_dialog(service: ProgressService, current_student_id: Optional[int]):
     st.caption("⭐ Note für eingereichte Prüfungen eintragen")
 
     if not current_student_id:
@@ -302,7 +302,7 @@ def add_bewertung_dialog(service: FortschrittService, current_student_id: Option
 
 
 @st.dialog("Studium abschließen")
-def finish_studium_dialog(service: FortschrittService, current_student_id: Optional[int]):
+def finish_studium_dialog(service: ProgressService, current_student_id: Optional[int]):
     """Dialog zum Abschließen des Studiums."""
     st.caption("🎓 Abschluss prüfen und Studium beenden")
     st.warning("⚠️ Voraussetzungen: ECTS erreicht + Abschlussprüfung bestanden")
@@ -395,7 +395,7 @@ def settings_dialog(current_student_id: Optional[int]):
 # =================== HAUPT-ACTION-BAR ===================
 
 def render_action_bar(
-    service: FortschrittService,
+    service: ProgressService,
     student_id: Optional[int],
 ) -> None:
     """Eine Zeile von Buttons – jeder Button öffnet einen eigenen Dialog."""
