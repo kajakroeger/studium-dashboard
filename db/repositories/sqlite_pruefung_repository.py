@@ -14,30 +14,37 @@ from .pruefung_repository import PruefungRepository
 
 
 class SQLitePruefungRepository(PruefungRepository):
+    """
+    📦💁‍♂️ REGALMANAGER (Prüfung) 
+    - führt Aktionen mit der Zutat 'Prüfung' aus z.B. finden, hinzufügen und entfernen,  
+
+    Technisch:
+    - Konkreter SQLite-Adapter für KursRepository.
+    - Nutzt ConnectionProvider (bleibt dadurch DB-agnostisch auf Interface-Ebene)
+    - Verwendet über den ConnectionProvider sqlite3 
+    - Enthält Mapping-Funktionen DB <-> Model
+    """
     def __init__(self, provider: ConnectionProvider) -> None:
         self._provider = provider
-        self._ensure_table()
+        self._ensure_schema()
 
-    # Tabelle anlegen, falls noch nicht vorhanden
-    def _ensure_table(self) -> None:
-        sql = """
-        CREATE TABLE IF NOT EXISTS pruefung (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            bearbeitung_id INTEGER NOT NULL,
-            pruefungsform TEXT NOT NULL,
-            note REAL,
-            versuch_nr INTEGER NOT NULL DEFAULT 0,
-            bestanden INTEGER,         -- NULL/0/1
-            letzter_versuch INTEGER    -- 0/1
-        );
-        """
+    def _ensure_schema(self) -> None:
+        """Erstellt die Tabelle 'pruefung', sofern sie noch nicht existiert."""
         with self._provider.connect() as conn:
-            conn.execute(sql)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS pruefung (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    bearbeitung_id INTEGER NOT NULL,
+                    pruefungsform TEXT NOT NULL,
+                    note REAL,
+                    versuch_nr INTEGER NOT NULL DEFAULT 0,
+                    bestanden INTEGER,         -- NULL/0/1
+                    letzter_versuch INTEGER    -- 0/1
+                )
+            """)
             conn.commit()
 
-    # ------------------------------------------------------------------ #
-    # Public API
-    # ------------------------------------------------------------------ #
+    # ------------------- CRUD -------------------
 
     def get_by_id(self, pruefung_id: int) -> Optional[Pruefung]:
         with self._provider.connect() as conn:
@@ -156,16 +163,23 @@ class SQLitePruefungRepository(PruefungRepository):
     # ------------------------------------------------------------------ #
     @staticmethod
     def _row_to_model(row) -> Pruefung:
+        note_raw = row["note"]
+
+        # Behandelt folgenden Fehler: could not convert string to float: ''
+        # '' (leerer String) sauber behandeln -> None
+        if note_raw is None:
+            note_val = None
+        elif isinstance(note_raw, str) and note_raw.strip() == "":
+            note_val = None
+        else:
+            note_val = float(note_raw)
+
         return Pruefung(
             id=int(row["id"]),
             bearbeitung_id=int(row["bearbeitung_id"]),
             pruefungsform=Pruefungsform(row["pruefungsform"]),
-            note=row["note"],
-            versuch_nr=int(row["versuch_nr"]),
-            bestanden=(
-                bool(row["bestanden"])
-                if row["bestanden"] is not None
-                else False
-            ),
-            letzter_versuch=bool(row["letzter_versuch"]),
+            note=note_val,
+            bestanden=bool(row["bestanden"]) if row["bestanden"] is not None else None,
+            versuch_nr=int(row["versuch_nr"]) if row["versuch_nr"] is not None else 0,
+            letzter_versuch=bool(row["letzter_versuch"]) if row["letzter_versuch"] is not None else False,
         )

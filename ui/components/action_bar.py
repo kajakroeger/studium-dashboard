@@ -1,19 +1,18 @@
 # ui/components/action_bar.py
-
 from __future__ import annotations
 from datetime import date
-import sqlite3
 from typing import Optional
 import streamlit as st
-from core import ProgressService
-from db.repositories.student_repository import StudentRepository
+from core import WorkflowService, get_services
 from models.pruefung import Pruefungsform
 
 
 # =================== DIALOG-FUNKTIONEN ===================
 
+workflow, progress = get_services()
+
 @st.dialog("Kurs hinzufügen")
-def add_kurs_dialog(service: ProgressService, student_id: Optional[int]):
+def add_kurs_dialog(workflow, progress, student_id: Optional[int], studiengang_id: Optional[int]):
     """Dialog zum Hinzufügen eines neuen Kurses."""
     st.caption("📘 Neuen Kurs anlegen")
     st.write(f"Student-ID: '{student_id}'")
@@ -27,11 +26,12 @@ def add_kurs_dialog(service: ProgressService, student_id: Optional[int]):
     name_clean = name.strip()
     kuerzel_clean = kurs_kuerzel.strip()
     
+    
     # Warnungen anzeigen, wenn Name/Kürzel bereits existieren
-    if name_clean and service.kurs_name_exists(name_clean):
+    if name_clean and workflow.kurs_name_exists(name_clean, studiengang_id):
         st.warning(f"⚠️ Ein Kurs mit dem Namen '{name_clean}' existiert bereits.")
     
-    if kuerzel_clean and service.kurs_kuerzel_exists(kuerzel_clean):
+    if kuerzel_clean and workflow.kurs_kuerzel_exists(kuerzel_clean, studiengang_id):
         st.warning(f"⚠️ Ein Kurs mit dem Kürzel '{kuerzel_clean}' existiert bereits.")
 
     pruefungsform = st.selectbox(
@@ -66,8 +66,9 @@ def add_kurs_dialog(service: ProgressService, student_id: Optional[int]):
             return
         
         try:
-            service.add_kurs_mit_bearbeitung_und_pruefung(
+            workflow.kurs_hinzufuegen(
                 student_id=student_id,
+                studiengang_id=studiengang_id,
                 name=name.strip(),
                 kurs_kuerzel=kurs_kuerzel.strip(),
                 ects=int(ects),
@@ -77,6 +78,7 @@ def add_kurs_dialog(service: ProgressService, student_id: Optional[int]):
                 plan_end=plan_end or None,
                 start_datum=start_datum or None,
             )
+            progress.invalidate_cache(student_id=student_id, studiengang_id=studiengang_id)
             st.session_state["add_kurs__just_saved"] = True
             st.rerun()
         except Exception as ex:
@@ -86,40 +88,19 @@ def add_kurs_dialog(service: ProgressService, student_id: Optional[int]):
 
 
 @st.dialog("Kurs starten")
-def start_kurs_dialog(service: ProgressService, current_student_id: Optional[int]):
+def start_kurs_dialog(workflow, progress, student_id: Optional[int], studiengang_id: Optional[int]):
     """
     Dialog zum Starten eines Kurses.
     Es werden nur Bearbeitungen ohne start_datum und nicht 'abgeschlossen' angezeigt.
     """
     st.caption("▶ Kursbearbeitung starten")
 
-    if not current_student_id:
+    if not student_id:
         st.error("Bitte zuerst einen Studenten auswählen/anlegen.")
         return
 
-    # Bearbeitungen für den Studenten laden
-    try:
-        bearbeitungen = service.bearbeitungen_fuer_student(current_student_id) or []
-    except Exception as ex:
-        st.error(f"Fehler beim Laden der Bearbeitungen: {ex}")
-        return
-
     # Kandidaten zum Starten filtern
-    startbare_items = []
-    for b in bearbeitungen:
-        status_raw = getattr(b, "status", "")
-        status_text = getattr(status_raw, "value", status_raw)
-        status_text = str(status_text).strip().lower()
-
-        start_datum = getattr(b, "start_datum", None)
-        abgabe_datum = getattr(b, "abgabe_datum", None)
-
-        # Nur Bearbeitungen ohne Startdatum und nicht abgeschlossen
-        if start_datum is None and status_text != "abgeschlossen":
-            kurs = service.kurs_by_id(getattr(b, "kurs_id", None))
-            if kurs:
-                label = f"{getattr(kurs, 'kurs_kuerzel', '') or kurs.name}"
-                startbare_items.append((b, kurs, label))
+    startbare_items = workflow.inaktive_bearbeitungen(student_id, studiengang_id)
 
     if not startbare_items:
         st.info("Es gibt derzeit keine Kurse, die gestartet werden können.")
@@ -151,10 +132,11 @@ def start_kurs_dialog(service: ProgressService, current_student_id: Optional[int
     if c2.button("▶ Kurs starten", type="primary", use_container_width=True):
         try:
             # hier rufen wir eine Service-Methode auf (siehe unten)
-            service.bearbeitung_starten(
+            workflow.bearbeitung_starten(
                 bearbeitung_id=getattr(bearbeitung, "id", None),
                 start_datum=start_datum,
             )
+            progress.invalidate_cache(student_id=student_id, studiengang_id=studiengang_id)
             st.session_state["start_kurs__just_saved"] = True
             st.rerun()
         except Exception as ex:
@@ -163,108 +145,88 @@ def start_kurs_dialog(service: ProgressService, current_student_id: Optional[int
 
 
 @st.dialog("Prüfung abgeben")
-def submit_pruefung_dialog(service: ProgressService, student_id: Optional[int]):
-    """Dialog zum Abgeben einer Prüfung."""
+def submit_pruefung_dialog(workflow, progress, student_id: Optional[int], studiengang_id: Optional[int]):
     st.caption("📝 Kurs wählen und Abgabedatum setzen")
-    
+
     if not student_id:
         st.error("Bitte zuerst einen Studenten auswählen/anlegen.")
         return
-    
-    # Kurse laden, die aktiv sind & noch nicht eingereicht
+
     try:
-        kurse = service.kurse_fuer_pruefungsabgabe(student_id)
+        items = workflow.aktive_bearbeitungen(student_id, studiengang_id)  # (b, kurs, label)
     except Exception as ex:
         st.error(f"Fehler beim Laden der Kurse: {ex}")
         return
 
-    if not kurse:
+    if not items:
         st.info("Keine aktiven Kurse vorhanden, die eingereicht werden können.")
-        st.caption("💡 **Tipp:** Füge zuerst einen Kurs hinzu und starte die Bearbeitung.")
+        st.caption("💡 Tipp: Füge zuerst einen Kurs hinzu und starte die Bearbeitung.")
         return
 
-    # Optionen bauen (Label → ID)
-    options = []
-    values = []
-    
-    for k in kurse:
-        kurs_kuerzel = k.kurs_kuerzel or ""  # Nutze direkten Attributzugriff
-        label = f"{kurs_kuerzel+' – ' if kurs_kuerzel else ''}{k.name}"
-        options.append(label)
-        values.append(k.id)
-
-    # Selectbox zeigt Label, wir halten parallel den Kurs-ID-Wert
+    labels = [lbl for _, _, lbl in items]
     idx = st.selectbox(
-        "**Kurs***", 
-        list(range(len(options))), 
-        format_func=lambda i: options[i], 
-        key="submit_kurs_idx"
+        "**Kurs***",
+        options=list(range(len(labels))),
+        format_func=lambda i: labels[i],
+        key="submit_kurs_idx",
     )
-    kurs_id = values[idx]
+
+    _, kurs, _ = items[idx]
+    kurs_id = int(kurs.id)
 
     abgabe = st.date_input("**Abgabedatum***", value=date.today(), key="submit_abgabe")
 
     st.divider()
     col_cancel, col_save = st.columns([1, 1])
-    
+
     if col_cancel.button("❌ Abbrechen", use_container_width=True):
         st.rerun()
-    
+
     if col_save.button("📤 Abgeben", type="primary", use_container_width=True):
         try:
-            service.pruefung_abgeben(
+            workflow.pruefung_abgeben(
                 student_id=student_id,
-                kurs_id=int(kurs_id),
+                kurs_id=kurs_id,
                 abgabe_datum=abgabe,
             )
+            progress.invalidate_cache(student_id=student_id, studiengang_id=studiengang_id)
             st.session_state["submit_pruefung__just_saved"] = True
             st.rerun()
         except Exception as ex:
             st.error(f"❌ Fehler beim Abgeben: {ex}")
 
 
+
 @st.dialog("Bewertung eintragen")
-def add_bewertung_dialog(service: ProgressService, current_student_id: Optional[int]):
+def add_bewertung_dialog(workflow, progress, student_id: Optional[int], studiengang_id: Optional[int]):
     st.caption("⭐ Note für eingereichte Prüfungen eintragen")
 
-    if not current_student_id:
+    if not student_id:
         st.error("Bitte zuerst einen Studenten auswählen/anlegen.")
         return
 
     try:
-        offene = service.offene_kurse_fuer_bewertung(current_student_id)
+        items = workflow.eingereichte_bearbeitungen(student_id, studiengang_id)  # (b, kurs, pruef, label)
     except Exception as ex:
         st.error(f"Fehler beim Laden der offenen Bewertungen: {ex}")
         return
 
-    if not offene:
+    if not items:
         st.info(
             "Aktuell gibt es keine Bearbeitungen mit Status 'Prüfung eingereicht', "
             "die bewertet werden können."
         )
         return
 
-    # Labels bauen
-    labels = []
-    for b, kurs, pruefung in offene:
-        abgabe_str = b.abgabe_datum.strftime("%d.%m.%Y") if b.abgabe_datum else "kein Datum"
-        if pruefung is None:
-            status_txt = "noch keine Note"
-        else:
-            status_txt = f"bisherige Note: {pruefung.note}"
-
-        labels.append(
-            f"{kurs.kurs_kuerzel or kurs.name} – Abgabe: {abgabe_str} – {status_txt}"
-        )
-
+    labels = [lbl for _, _, _, lbl in items]
     idx = st.selectbox(
         "**Kurs / Bearbeitung***",
-        options=list(range(len(offene))),
+        options=list(range(len(labels))),
         format_func=lambda i: labels[i],
         key="dialog_grade_bearbeitung_idx",
     )
 
-    bearb, kurs, _ = offene[idx]
+    bearb, kurs, _, _ = items[idx]
 
     note = st.number_input(
         "**Note*** (1.0 - 5.0)",
@@ -285,11 +247,13 @@ def add_bewertung_dialog(service: ProgressService, current_student_id: Optional[
 
     if c2.button("💾 Speichern", type="primary", use_container_width=True):
         try:
-            p = service.note_fuer_kurs_eintragen(
-                student_id=current_student_id,
-                kurs_id=kurs.id,
+            p = workflow.note_eintragen(
+                student_id=student_id,
+                kurs_id=int(kurs.id),
                 note=float(note),
             )
+            progress.invalidate_cache(student_id=student_id, studiengang_id=studiengang_id)
+
             st.session_state["add_bewertung__just_saved"] = True
             st.session_state["last_pruefung_info"] = {
                 "versuch_nr": getattr(p, "versuch_nr", None),
@@ -302,63 +266,50 @@ def add_bewertung_dialog(service: ProgressService, current_student_id: Optional[
 
 
 @st.dialog("Studium abschließen")
-def finish_studium_dialog(service: ProgressService, current_student_id: Optional[int]):
-    """Dialog zum Abschließen des Studiums."""
+def finish_studium_dialog(workflow, progress, student_id: Optional[int], studiengang_id: Optional[int]):
     st.caption("🎓 Abschluss prüfen und Studium beenden")
     st.warning("⚠️ Voraussetzungen: ECTS erreicht + Abschlussprüfung bestanden")
 
-    if not current_student_id:
-        st.error("Bitte zuerst einen Studenten auswählen/anlegen.")
+    if not student_id or not studiengang_id:
+        st.error("Bitte zuerst einen Studenten und einen Studiengang auswählen.")
         return
 
-    # --- Studiengang laden (ECTS-Ziel) ---
-    try:
-        studiengaenge = service.studiengaenge_by_student_id(current_student_id) or []
-        ziel_ects = studiengaenge[0].ziel_ects
-    except Exception:
-        ziel_ects = None
+    # --- ECTS laden ---
+    daten = progress.status_uebersicht_daten(student_id, studiengang_id)
 
-    # --- Bestanden-ECTS laden ---
-    try:
-        ects_bestanden = float(service.ects_summe_bestanden(current_student_id) or 0.0)
-    except Exception:
-        ects_bestanden = 0.0
-
-    # --- Bedingungen prüfen ---
-    hat_ects_ziel = ziel_ects is not None
-    genug_ects = ects_bestanden >= ziel_ects if hat_ects_ziel else False
-
-    # --- Fortschritt anzeigen ---
-    if hat_ects_ziel:
-        st.info(f"📚 **ECTS-Fortschritt:** {ects_bestanden:.0f} / {ziel_ects} ECTS")
-        if not genug_ects:
-            st.error("❌ Ziel-ECTS noch nicht erreicht.")
-    else:
-        st.error("❌ Kein Studiengang gefunden. Bitte zuerst einen Studiengang vergeben.")
+    if not daten or daten.ects_gesamt is None:
+        st.error("❌ Studiengang nicht korrekt geladen.")
         return
+
+    ects_bestanden = int(daten.ects_bestanden or 0.0)
+    ziel_ects = int(daten.ects_gesamt)
+    genug_ects = ects_bestanden >= ziel_ects
+    notenschnitt = daten.notenschnitt
+
+    st.info(f"📚 **ECTS-Fortschritt:** {ects_bestanden:.0f} / {ziel_ects} ECTS")
+    if not genug_ects:
+        st.error("❌ Ziel-ECTS noch nicht erreicht.")
 
     st.divider()
-
     col_cancel, col_save = st.columns([1, 1])
 
     if col_cancel.button("❌ Abbrechen", use_container_width=True):
         st.rerun()
 
-    # Button deaktivieren bis Bedingungen erfüllt sind
-    disabled = not genug_ects
-
     if col_save.button(
-        "✅ Prüfen & Abschließen",
+        "✅ Abschließen",
         type="primary",
         use_container_width=True,
-        disabled=disabled
+        disabled=not genug_ects,
     ):
         try:
-            ok = service.studium_abschliessen(
-                student_id=current_student_id,
-                erforderliche_ects=ziel_ects,
+            ok = workflow.studium_abschliessen(
+                student_id=student_id,
+                studiengang_id=studiengang_id,
+                notenschnitt=notenschnitt,
             )
             if ok:
+                progress.invalidate_cache(student_id=student_id, studiengang_id=studiengang_id)
                 st.session_state["finish_studium__success"] = True
                 st.rerun()
             else:
@@ -367,8 +318,9 @@ def finish_studium_dialog(service: ProgressService, current_student_id: Optional
             st.error(f"❌ Fehler: {ex}")
 
 
+
 @st.dialog("Einstellungen")
-def settings_dialog(current_student_id: Optional[int]):
+def settings_dialog(student_id: Optional[int], studiengang_id: Optional[int]):
     """Dialog für Einstellungen."""
     st.caption("⚙️ Anwendungseinstellungen")
     
@@ -395,8 +347,9 @@ def settings_dialog(current_student_id: Optional[int]):
 # =================== HAUPT-ACTION-BAR ===================
 
 def render_action_bar(
-    service: ProgressService,
+    workflow: WorkflowService,
     student_id: Optional[int],
+    studiengang_id: Optional[int],
 ) -> None:
     """Eine Zeile von Buttons – jeder Button öffnet einen eigenen Dialog."""
     
@@ -433,7 +386,7 @@ def render_action_bar(
             st.session_state["show_add_kurs_dialog"] = True
 
     with col2:
-        if st.button("▶ Kurs starten", use_container_width=True, key="open_start_kurs"):
+        if st.button("▶️ Kurs starten", use_container_width=True, key="open_start_kurs"):
             st.session_state["show_start_kurs_dialog"] = True
     
     with col3:
@@ -441,7 +394,7 @@ def render_action_bar(
             st.session_state["show_submit_pruefung_dialog"] = True
     
     with col4:
-        if st.button("⭐ Bewertung eintragen", use_container_width=True, key="open_add_bewertung"):
+        if st.button("⭐ Note eintragen", use_container_width=True, key="open_add_bewertung"):
             st.session_state["show_add_bewertung_dialog"] = True
     
     with col5:
@@ -456,24 +409,24 @@ def render_action_bar(
     # Dialoge aufrufen
     if st.session_state.get("show_add_kurs_dialog", False):
         st.session_state["show_add_kurs_dialog"] = False
-        add_kurs_dialog(service, student_id)
+        add_kurs_dialog(workflow, progress, student_id, studiengang_id)
 
     if st.session_state.get("show_start_kurs_dialog", False):
         st.session_state["show_start_kurs_dialog"] = False
-        start_kurs_dialog(service, student_id)
+        start_kurs_dialog(workflow, progress, student_id, studiengang_id)
     
     if st.session_state.get("show_submit_pruefung_dialog", False):
         st.session_state["show_submit_pruefung_dialog"] = False
-        submit_pruefung_dialog(service, student_id)
+        submit_pruefung_dialog(workflow, progress, student_id, studiengang_id)
     
     if st.session_state.get("show_add_bewertung_dialog", False):
         st.session_state["show_add_bewertung_dialog"] = False
-        add_bewertung_dialog(service, student_id)
+        add_bewertung_dialog(workflow, progress, student_id, studiengang_id)
     
     if st.session_state.get("show_finish_studium_dialog", False):
         st.session_state["show_finish_studium_dialog"] = False
-        finish_studium_dialog(service, student_id)
+        finish_studium_dialog(workflow, progress, student_id, studiengang_id)
     
     if st.session_state.get("show_settings_dialog", False):
         st.session_state["show_settings_dialog"] = False
-        settings_dialog(student_id)
+        settings_dialog(student_id, progress, studiengang_id)

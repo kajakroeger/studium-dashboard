@@ -1,18 +1,9 @@
 # db/repositories/sqlite_bearbeitung_repository.py
-"""
-SQLite-Repo für Bearbeitung (CRUD + Schema-Ensure/Migration).
-Achtet auf:
-- korrekte SQL-Strings (Leerzeichen!)
-- idempotente Migration (Spalten prüfen)
-- Enum-Mapping für StatusBearbeitung
-- ISO-String <-> date konvertieren
-"""
-
 from __future__ import annotations
 from typing import Iterable, Optional
 from datetime import date
 
-from db.connection_provider import ConnectionProvider
+from db import ConnectionProvider
 from db.repositories.bearbeitung_repository import BearbeitungRepository
 from models.bearbeitung import Bearbeitung, StatusBearbeitung
 
@@ -25,14 +16,23 @@ def _to_str(d: Optional[date]) -> Optional[str]:
 
 
 class SQLiteBearbeitungRepository(BearbeitungRepository):
+    """
+    📦💁‍♂️ REGALMANAGER (Bearbeitung) 
+    - führt Aktionen mit der Zutat 'Bearbeitung' aus z.B. finden, hinzufügen und entfernen,  
+
+    Technisch:
+    - Konkreter SQLite-Adapter für KursRepository.
+    - Nutzt ConnectionProvider (bleibt dadurch DB-agnostisch auf Interface-Ebene)
+    - Verwendet über den ConnectionProvider sqlite3 
+    - Enthält Mapping-Funktionen DB <-> Model
+    """
     def __init__(self, provider: ConnectionProvider) -> None:
         self._provider = provider
         self._ensure_schema()
 
     def _ensure_schema(self) -> None:
-        """Tabelle anlegen + minimale Migrationen (idempotent)."""
+        """Erstellt die Tabelle 'bearbeitung', sofern sie noch nicht existiert."""
         with self._provider.connect() as conn:
-            # Basistabelle
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS bearbeitung (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -45,26 +45,7 @@ class SQLiteBearbeitungRepository(BearbeitungRepository):
                     abgabe_datum TEXT
                 )
             """)
-            # Migrationen: fehlende Spalten nachrüsten (falls die Tabelle älter ist)
-            cols = {r["name"] for r in conn.execute("PRAGMA table_info(bearbeitung)")}
-            add_cols = []
-            if "plan_start" not in cols:
-                add_cols.append("ALTER TABLE bearbeitung ADD COLUMN plan_start TEXT;")
-            if "plan_end" not in cols:
-                add_cols.append("ALTER TABLE bearbeitung ADD COLUMN plan_end TEXT;")
-            if "start_datum" not in cols:
-                add_cols.append("ALTER TABLE bearbeitung ADD COLUMN start_datum TEXT;")
-            if "abgabe_datum" not in cols:
-                add_cols.append("ALTER TABLE bearbeitung ADD COLUMN abgabe_datum TEXT;")
-            if "status" not in cols:
-                add_cols.append("ALTER TABLE bearbeitung ADD COLUMN status TEXT NOT NULL DEFAULT 'inaktiv';")
-
-            for stmt in add_cols:
-                conn.execute(stmt)
             conn.commit()
-
-            # WICHTIG: Falls die Tabelle historisch OHNE 'id' angelegt wurde, kann SQLite das nicht einfach ändern.
-            # In dem Fall bitte DB löschen (Dev) oder: Daten migrieren (CREATE TMP + COPY + DROP + RENAME).
 
     # ------------------- CRUD -------------------
 
@@ -103,7 +84,7 @@ class SQLiteBearbeitungRepository(BearbeitungRepository):
                 ),
             )
             conn.commit()
-            new_id = int(cur.lastrowid)  # type: ignore[arg-type]
+            new_id = int(cur.lastrowid) 
         b.id = new_id
         return new_id
 
@@ -133,36 +114,6 @@ class SQLiteBearbeitungRepository(BearbeitungRepository):
         with self._provider.connect() as conn:
             conn.execute("DELETE FROM bearbeitung WHERE id = ?", (bearbeitung_id,))
             conn.commit()
-
-
-    def get_for_student_and_course_with_submission(
-        self,
-        student_id: int,
-        kurs_id: int,
-    ) -> Optional[Bearbeitung]:
-        """
-        Liefert die Bearbeitung eines Studenten für einen Kurs,
-        die bereits ein Abgabedatum hat (die neueste, falls mehrere existieren).
-        Wird z.B. beim Note-Eintragen verwendet.
-        """
-        with self._provider.connect() as conn:
-            row = conn.execute(
-                """
-                SELECT id, student_id, kurs_id, status, plan_start, plan_end,
-                       start_datum, abgabe_datum
-                FROM bearbeitung
-                WHERE student_id = ?
-                  AND kurs_id = ?
-                  AND abgabe_datum IS NOT NULL
-                ORDER BY abgabe_datum DESC, id DESC
-                LIMIT 1
-                """,
-                (student_id, kurs_id),
-            ).fetchone()
-
-        return self._row_to_model(row) if row else None
-
-    # ------------------- Mapping -------------------
 
     @staticmethod
     def _row_to_model(row) -> Bearbeitung:

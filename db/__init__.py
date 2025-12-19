@@ -1,17 +1,17 @@
+# db/__init__.py
 """
-db/__init__.py
-Dieses Paket enthält alle Module rund um den Datenbankzugriff.
-Beinhaltet:
-- ConnectionProvider-Interface
-- SQLiteConnectionProvider-Implementierung
-- Alle Repository-Interfaces und deren SQLite-Implementierungen
+- enthält alle Module rund um den Datenbankzugriff
+- Beinhaltet:
+    - DBConnection
+    - ConnectionProvider-Interface
+    - SQLiteConnectionProvider-Implementierung
 """
 
-from .connection_provider import ConnectionProvider
+from .connection_provider import DBConnection, ConnectionProvider 
 from .sqlite_connection_provider import SQLiteConnectionProvider
 
-# explizit exportieren, was öffentlich ist
 __all__ = [
-    "ConnectionProvider",
-    "SQLiteConnectionProvider",
+    "DBConnection",             # 🚪 LAGERZUGANG / TÜR
+    "ConnectionProvider",       # 👨‍💼 TÜRSTEHER 
+    "SQLiteConnectionProvider", # 🗝️ LAGERSCHLÜSSEL (SQLite)
 ]

@@ -7,13 +7,13 @@ Zweistufiges Onboarding:
 from __future__ import annotations
 import streamlit as st
 from datetime import date
-from core import ProgressService
+from core import WorkflowService, ProgressService
 
 def _init_state() -> None:
     st.session_state.setdefault("onb_step", 1)
-    st.session_state.setdefault("onb_form", {})  # sammelt Daten zwischendurch
+    st.session_state.setdefault("onb_form", {})  
 
-def _step1(service: ProgressService) -> None:
+def _step1() -> None:
     st.subheader("Schritt 1/2 – Deine Daten & Studienziele")
     with st.form("onb_step1"):
         name = st.text_input("Username *")
@@ -35,7 +35,7 @@ def _step1(service: ProgressService) -> None:
             st.session_state.onb_step = 2
             st.rerun()
 
-def _step2(service: ProgressService) -> None:
+def _step2(workflow: WorkflowService, progress: ProgressService) -> None:
     st.subheader("Schritt 2/2 – Dein Studiengang")
     with st.form("onb_step2"):
         sg_name = st.text_input("Studiengang-Name *", placeholder="z. B. B.Sc. Softwareentwicklung")
@@ -49,49 +49,54 @@ def _step2(service: ProgressService) -> None:
             st.session_state.onb_step = 1
             st.rerun()
         if save:
-            if not sg_name:
-                st.error("Studiengang-Name ist Pflicht.")
-                return
             f = st.session_state.onb_form
             try:
-                service.create_student(
-                    name=f["name"],
+                student_id, studiengang_id_new = workflow.onboarding(
+                    student_name=f["name"],
                     matrikelnummer=f["matrikel"],
                     email=f["email"],
                     uni_email=f["uni_email"],
-                    ziel_notenschnitt=f["ziel_noten"],
-                    ziel_enddatum=f["ziel_end"],
                     studiengang_name=sg_name,
-                    studiengang_monate=int(monate),
-                    studiengang_kurse=int(kurse),
-                    studiengang_ects=int(ects),
+                    anzahl_monate=int(monate),
+                    anzahl_kurse=int(kurse),
+                    ects_gesamt=int(ects),
+                    ziel_notenschnitt=float(f["ziel_noten"]),
+                    ziel_enddatum=f["ziel_end"],
                 )
+
+                # wichtig: ausgewählten Studiengang setzen, damit Dashboard sofort passt
+                st.session_state["studiengang_id"] = studiengang_id_new
+
+                # Cache invalidieren, damit neue Daten sichtbar werden
+                progress.invalidate_cache(student_id=student_id, studiengang_id=studiengang_id_new)
+
                 st.success("Gespeichert! Dashboard wird aktualisiert …")
                 st.session_state.pop("onb_form", None)
                 st.session_state.pop("onb_step", None)
                 st.rerun()
+
             except Exception as ex:
                 st.error(f"Fehler beim Anlegen: {ex}")
 
-def show_onboarding_dialog(service: ProgressService) -> None:
+def show_onboarding_dialog(workflow: WorkflowService, progress: ProgressService) -> None:
     _init_state()
     if hasattr(st, "modal"):
         with st.modal("Willkommen 👋 – Lass uns starten!"):
             if st.session_state.onb_step == 1:
-                _step1(service)
+                _step1()
             else:
-                _step2(service)
+                _step2(workflow, progress)
     elif hasattr(st, "dialog"):
         @st.dialog("Willkommen 👋 – Lass uns starten!")
         def _dlg():
             if st.session_state.onb_step == 1:
-                _step1(service)
+                _step1()
             else:
-                _step2(service)
+                _step2(workflow, progress)
         _dlg()
     else:
         with st.expander("👋 Willkommen – Lass uns starten!", expanded=True):
             if st.session_state.onb_step == 1:
-                _step1(service)
+                _step1()
             else:
-                _step2(service)
+                _step2(workflow, progress)

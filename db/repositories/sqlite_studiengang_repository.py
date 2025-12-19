@@ -4,12 +4,21 @@ SQLite-Implementierung des StudiengangRepository.
 Erstellt Tabelle idempotent und bietet get_or_create per Name.
 """
 from __future__ import annotations
-from typing import Optional
-from db.connection_provider import ConnectionProvider
+from db import ConnectionProvider
 from .studiengang_repository import StudiengangRepository
 from models import Studiengang
 
 class SQLiteStudiengangRepository(StudiengangRepository):
+    """
+    📦💁‍♂️ REGALMANAGER (Studiengang) 
+    - führt Aktionen mit der Zutat 'Kurs' aus z.B. finden, hinzufügen und entfernen,  
+
+    Technisch:
+    - Konkreter SQLite-Adapter für KursRepository.
+    - Nutzt ConnectionProvider (bleibt dadurch DB-agnostisch auf Interface-Ebene)
+    - Verwendet über den ConnectionProvider sqlite3 
+    - Enthält Mapping-Funktionen DB <-> Model
+    """
     def __init__(self, provider: ConnectionProvider) -> None:
         self._provider = provider
         self._ensure_schema()
@@ -18,6 +27,7 @@ class SQLiteStudiengangRepository(StudiengangRepository):
         return self._provider
 
     def _ensure_schema(self) -> None:
+        """Erstellt die Tabelle 'studiengang', sofern sie noch nicht existiert."""
         with self._provider.connect() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS studiengang (
@@ -30,6 +40,8 @@ class SQLiteStudiengangRepository(StudiengangRepository):
             """)
             conn.commit()
 
+    # ------------------- CRUD -------------------
+
     def create(self, s: Studiengang) -> int:
         with self._provider.connect() as conn:
             cur = conn.execute("""
@@ -37,7 +49,7 @@ class SQLiteStudiengangRepository(StudiengangRepository):
                 VALUES (?, ?, ?, ?)
             """, (s.name, s.anzahl_monate, s.anzahl_kurse, s.ects_gesamt))
             conn.commit()
-            new_id = int(cur.lastrowid)  # type: ignore[arg-type]
+            new_id = int(cur.lastrowid) 
         s.id = new_id
         return new_id
 

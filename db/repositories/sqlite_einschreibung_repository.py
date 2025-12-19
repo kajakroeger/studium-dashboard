@@ -1,5 +1,6 @@
 from typing import Optional, Iterable
 from datetime import date
+from db import ConnectionProvider
 from models.einschreibung import Einschreibung, StatusEinschreibung
 
 def _parse_date(val: Optional[str]) -> Optional[date]:
@@ -10,11 +11,22 @@ def _to_str(d: Optional[date]) -> Optional[str]:
 
 
 class SQLiteEinschreibungRepository:
-    def __init__(self, provider) -> None:
+    """
+    📦💁‍♂️ REGALMANAGER (Einschreibung) 
+    - führt Aktionen mit der Zutat 'Einschreibung' aus z.B. finden, hinzufügen und entfernen,  
+
+    Technisch:
+    - Konkreter SQLite-Adapter für KursRepository.
+    - Nutzt ConnectionProvider (bleibt dadurch DB-agnostisch auf Interface-Ebene)
+    - Verwendet über den ConnectionProvider sqlite3 
+    - Enthält Mapping-Funktionen DB <-> Model
+    """
+    def __init__(self, provider: ConnectionProvider) -> None:
         self._provider = provider
         self._ensure_schema()
 
     def _ensure_schema(self) -> None:
+        """Erstellt die Tabelle 'einschreibung', sofern sie noch nicht existiert."""
         with self._provider.connect() as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS einschreibung (
@@ -29,14 +41,9 @@ class SQLiteEinschreibungRepository:
                     abschluss_note REAL
                 )
             """)
-             # Migration: Fehlende Spalten nachrüsten
-            cols = {r["name"] for r in conn.execute("PRAGMA table_info(einschreibung)")}
-            if "end_datum" not in cols:
-                conn.execute("ALTER TABLE einschreibung ADD COLUMN end_datum TEXT;")
-            if "abschluss_note" not in cols:
-                conn.execute("ALTER TABLE einschreibung ADD COLUMN abschluss_note REAL;")
-
             conn.commit()
+
+    # ------------------- CRUD -------------------
 
     def get_by_id(self, einschreibung_id: int) -> Optional[Einschreibung]:
         with self._provider.connect() as conn:

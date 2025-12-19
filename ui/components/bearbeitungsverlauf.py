@@ -1,7 +1,6 @@
 # ui/components/bearbeitungsverlauf.py
 """
-Visualisiert die Bearbeitungszeiten aller abgeschlossenen Kurse als Balkendiagramm.
-Zeigt zusätzlich die durchschnittliche Bearbeitungszeit als gelbe Verlaufslinie.
+
 """
 import streamlit as st
 import plotly.graph_objects as go
@@ -11,6 +10,22 @@ from .kachel import kachel
 
 
 def render_bearbeitungsverlauf(vm: BearbeitungsverlaufViewModel) -> None:
+    """
+    🥗💁‍♂️ DEKORATEUR 
+    - nimmt den fertigen Teller entgegen (ViewModel)
+    - serviert ihn optisch ansprechend (Layout + Visualisierung)
+    - visualisiert die Bearbeitungszeit je abgeschlossenen Kurs und den Verlauf der 
+      durchschnittlichen Bearbeitungszeit.
+
+    Technisch:
+    - arbeitet ausschließlich mit ViewModels (keine DTOs, keine Models)
+    - enthält keine Service-Aufrufe (kein WorkflowService/ProgressService)
+    - enthält keine Geschäftslogik (keine ECTS-/Noten-Berechnungen)
+    - stellt dar:
+        - Streamlit-Widgets
+        - Plotly-Figure bauen
+        - Styling, Achsen, Hover, Leerezustände anzeigen
+    """
     with kachel("BEARBEITUNGSVERLAUF"):
         if not vm.hat_daten or not vm.eintraege:
             st.info(vm.fehlermeldung or "Noch keine Bearbeitungen vorhanden.")
@@ -93,6 +108,7 @@ def render_bearbeitungsverlauf(vm: BearbeitungsverlaufViewModel) -> None:
                 orientation="h",
                 yanchor="middle",
                 y=1.07,
+                
                 xanchor="right",
                 x=0.98,
                 font=dict(color="white", size=11),

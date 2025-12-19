@@ -1,5 +1,4 @@
 # ui/components/burndown_chart.py
-# Neue Welt ready
 """
 Burndown Chart: Visualisiert den Fortschritt bei ECTS-Punkten über Zeit.
 Zeigt abgeschlossene Kurse als Datenpunkte mit Hover-Informationen.
@@ -13,8 +12,20 @@ from .kachel import kachel
 
 def render_burndown_chart(vm: BurndownViewModel) -> None:
     """
-    Rendert das Burndown Chart auf Basis des BurndownViewModel.
-    Keine Service-Aufrufe, keine Domain-Logik mehr.
+    🥗💁‍♂️ DEKORATEUR 
+    - nimmt den fertigen Teller entgegen (ViewModel)
+    - serviert ihn optisch ansprechend (Layout + Visualisierung)
+    - visualisiert den Verlauf der abgeschlossenen Kurse und den Idealverlauf, um den Studiengang
+      bis zum geplanten Abschlussdatum zu abzuschließen 
+
+    Technisch:
+    - arbeitet ausschließlich mit ViewModels (keine DTOs, keine Models)
+    - enthält keine Service-Aufrufe (kein WorkflowService/ProgressService)
+    - enthält keine Geschäftslogik (keine ECTS-/Noten-Berechnungen)
+    - stellt dar:
+        - Streamlit-Widgets
+        - Plotly-Figure bauen
+        - Styling, Achsen, Hover, Leerezustände anzeigen
     """
     with kachel("BURN DOWN CHART: ZEITPLAN"):
         if not vm.hat_daten:

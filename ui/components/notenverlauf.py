@@ -1,21 +1,26 @@
 # ui/components/notenverlauf.py
-"""
-Visualisiert den Notenverlauf über alle abgeschlossenen Kurse.
-Zeigt die Noten als Linienchart mit Kurskürzel auf der X-Achse.
-"""
-from typing import List, Tuple
 import streamlit as st
 import plotly.graph_objects as go
 
 from core.view_models import NotenverlaufViewModel
-from models.bearbeitung import StatusBearbeitung
 from .kachel import kachel
 
 
 def render_notenverlauf(vm: NotenverlaufViewModel) -> None:
     """
-    Rendert den Notenverlauf inkl. Verlauf des Durchschnitts
-    auf Basis des NotenverlaufViewModels.
+    🥗💁‍♂️ DEKORATEUR 
+    - nimmt den fertigen Teller entgegen (ViewModel)
+    - serviert ihn optisch ansprechend (Layout + Visualisierung)
+    - visualisiert den Verlauf der erreichten Noten und Notendurchschnitts
+
+    Technisch:
+    - arbeitet ausschließlich mit ViewModels (keine DTOs, keine Models)
+    - enthält keine Service-Aufrufe (kein WorkflowService/ProgressService)
+    - enthält keine Geschäftslogik (keine ECTS-/Noten-Berechnungen)
+    - stellt dar:
+        - Streamlit-Widgets
+        - Plotly-Figure bauen
+        - Styling, Achsen, Hover, Leerezustände anzeigen
     """
     with kachel("NOTENVERLAUF"):
         if not vm.hat_daten:

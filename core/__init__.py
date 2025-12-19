@@ -1,7 +1,16 @@
 # core/__init__.py
 """
-Services und deren Factory-Funktion.
-Initialisierung der globalen Service-Instanzen.
+ 📋 KÜCHENPLAN
+- koordiniert zwischen Lagerregale (Repositories), Schlüssel zum Lager, Küchenkoordination (WorkflowService) und Koch (ProgressService) 
+
+Technisch
+- verdrahtet die Infrastruktur (SQLite + Repositories) mit den Domänen-Services
+- entscheidet, welche konkrete Technik (z. B. SQLite) verwendet wird
+- stellt fertig konfigurierte Services für die UI bereit
+
+- Enthält KEINE Fachlogik
+- Enthält KEINE SQL-Queries
+- UI kennt nur Services, keine Repositories, keine DB-Technik
 """
 
 from __future__ import annotations
@@ -10,7 +19,7 @@ from typing import Optional, Tuple
 from .workflow_service import WorkflowService
 from .progress_service import ProgressService
 
-from db.sqlite_connection_provider import SQLiteConnectionProvider
+from db import SQLiteConnectionProvider
 
 from db.repositories.sqlite_student_repository import SQLiteStudentRepository
 from db.repositories.sqlite_bearbeitung_repository import SQLiteBearbeitungRepository
@@ -19,17 +28,29 @@ from db.repositories.sqlite_pruefung_repository import SQLitePruefungRepository
 from db.repositories.sqlite_einschreibung_repository import SQLiteEinschreibungRepository
 from db.repositories.sqlite_studiengang_repository import SQLiteStudiengangRepository
 
-# Globale Service-Instanzen (Singleton-Pattern)
+# Globale Service-Instanzen 
+# - Services müssen nicht bei jeder Page/bei jedem Re-Run neu gebaut werden.
+# - Repositories/Provider werden konsistent nur einmal initialisiert.
 _workflow_service: Optional[WorkflowService] = None
 _progress_service: Optional[ProgressService] = None
 
-
+# TODO: Wenn die Datenbank-Technologie ausgetauscht werden sollte (z.B. PostgreSQL statt SQLite), 
+# dann hier die Verdrahtung anpassen.
 def create_services(db_path: str = "data/studium.db") -> Tuple[WorkflowService, ProgressService]:
-    """
-    Factory-Funktion für alle Services.
+    """    
+    Erzeugt und initialisiert die Service-Layer-Instanzen.
 
-    Dependency-Flow:
-    Repositories → WorkflowService → ProgressService
+    Parameter:
+    - db_path: Pfad zur SQLite DB. Default zeigt auf die produktive lokale DB.
+
+    Rückgabe:
+    - (WorkflowService, ProgressService)
+
+    Ablauf:
+    1) Connection-Provider erzeugen
+    2) Repositories auf SQLite-Basis erstellen
+    3) WorkflowService bekommt alle Repositories (Single Source of Truth für Fachlogik)
+    4) ProgressService bekommt nur WorkflowService (keine DB-Abhängigkeiten)
     """
     global _workflow_service, _progress_service
 
@@ -48,7 +69,7 @@ def create_services(db_path: str = "data/studium.db") -> Tuple[WorkflowService, 
     einschreibung_repo = SQLiteEinschreibungRepository(provider)
     studiengang_repo = SQLiteStudiengangRepository(provider)
 
-    # 3) WorkflowService – bekommt alle Repositories
+    # 3) WorkflowService – mit allen Repositories
     _workflow_service = WorkflowService(
         student_repo=student_repo,
         bearbeitung_repo=bearbeitung_repo,
@@ -58,17 +79,14 @@ def create_services(db_path: str = "data/studium.db") -> Tuple[WorkflowService, 
         studiengang_repo=studiengang_repo,
     )
 
-    # 4) ProgressService – bekommt NUR den Workflow
+    # 4) ProgressService: für Kennzahlen für die UI auf Basis des Workflows, ist damit unabhängig von der DB
     _progress_service = ProgressService(workflow=_workflow_service)
 
     return _workflow_service, _progress_service
 
 
 def get_services() -> Tuple[WorkflowService, ProgressService]:
-    """
-    Liefert die globalen Service-Instanzen.
-    Lazy Initialization beim ersten Aufruf.
-    """
+    """Liefert WorkflowService und ProgressService."""
     global _workflow_service, _progress_service
 
     if _workflow_service is None or _progress_service is None:
@@ -78,10 +96,17 @@ def get_services() -> Tuple[WorkflowService, ProgressService]:
 
 
 def get_workflow_service() -> WorkflowService:
-    """Convenience: nur den WorkflowService holen."""
+    """
+    Liefert nur den WorkflowService.
+    Praktisch für Pages/Komponenten, die nur CRUD/Fachlogik brauchen
+    (z. B. Anlegen von Kursen, Eintragen von Prüfungen).
+    """
     return get_services()[0]
 
 
 def get_progress_service() -> ProgressService:
-    """Convenience: nur den ProgressService holen."""
+    """
+    Liefert nur den ProgressService.
+    Praktisch für Dashboard/Reports (Charts, KPIs), ohne direkt DB-Repos anzufassen.
+    """
     return get_services()[1]

@@ -1,8 +1,8 @@
+from typing import Optional
 import streamlit as st
 
 
-# Hauptfunktion -----------------------------------------------------
-def render_debug_info(service, student_id):
+def render_debug_info(service, student_id, studiengang_id: Optional[int]):
     """
     Zeigt umfangreiche Debug-Infos zum gewählten Studenten an:
     - Studentendaten
@@ -14,7 +14,7 @@ def render_debug_info(service, student_id):
     with st.expander("🔎 Debug (nur temporär)"):
         try:
             # ---------- Student ----------
-            if st.checkbox("Student"):
+            if st.checkbox("Alle Studenten"):
                 student = service.student_by_id(student_id)
                 if student:
                     st.json({
@@ -32,7 +32,7 @@ def render_debug_info(service, student_id):
             if st.checkbox("Studiengang"):
                 studiengaenge = service.studiengaenge_by_student_id(student_id)
                 if studiengaenge:
-                    st.write(f"Gefundene Studiengänge: {len(studiengaenge)}")
+                    st.write(f"Alle Studiengänge: {len(studiengaenge)}")
                     st.json([
                         {
                             "id:": sg.id,
@@ -49,20 +49,20 @@ def render_debug_info(service, student_id):
 
             # ---------- Einschreibungen ----------
             if st.checkbox("Einschreibungen"):
-                enrs = service.list_by_student(student_id)  # Liste!
+                enrs = service.einschreibungen_fuer_student(student_id)  
                 if enrs:
-                    st.write(f"Gefunden: {len(enrs)}")
+                    st.write(f"Alle Einschreibungen: {len(enrs)}")
                     st.json([
                         {
-                            "id":            getattr(e, "id", None),
-                            "student_id":    getattr(e, "student_id", None),
-                            "studiengang_id":getattr(e, "studiengang_id", None),
-                            "status":        str(getattr(e, "status", None)),
-                            "start_datum":   getattr(e, "start_datum", None),
-                            "ziel_enddatum": getattr(e, "ziel_enddatum", None),
-                            "ziel_notenschnitt": getattr(e, "ziel_notenschnitt", None),
-                            "end_datum":     getattr(e, "end_datum", None),
-                            "abschluss_note":getattr(e, "abschluss_note", None),
+                            "id": e.id,
+                            "student_id": e.student_id,
+                            "studiengang_id": e.studiengang_id,
+                            "status": e.status,
+                            "start_datum": e.start_datum,
+                            "ziel_enddatum": e.ziel_enddatum,
+                            "ziel_notenschnitt": e.ziel_notenschnitt,
+                            "end_datum": e.end_datum,
+                            "abschluss_note": e.abschluss_note,
                         }
                         for e in enrs
                     ])
@@ -72,17 +72,19 @@ def render_debug_info(service, student_id):
 
             # ---------- Kurse ----------
             if st.checkbox("Kurse"):
-                kurse = service.kurse_fuer_student(student_id)
+                kurse = service.kurse_fuer_student(student_id, studiengang_id)
+
                 if kurse:
-                    st.write(f"Gefunden: {len(kurse)}")
+                    st.write(f"Alle Kurse des aktuellen Studenten und ausgewählten Studiengangs: {len(kurse)}")
                     st.json([
                         {
                             "id": k.id,
-                            "name":k.name,
+                            "name": k.name,
                             "kurs_kuerzel": k.kurs_kuerzel,
                             "ects": k.ects,
                             "tutor": k.tutor,
-                            "semester": k.semester
+                            "semester": k.semester_nr,
+                            "studiengang_id": k.studiengang_id,
                         }
                         for k in kurse
                     ])
@@ -90,8 +92,8 @@ def render_debug_info(service, student_id):
                     st.warning("Keine Kurse gefunden")
 
             # ---------- Bearbeitungen ----------
-            if st.checkbox("Bearbeitungen"):
-                bearb = service.bearbeitungen_fuer_student(student_id)
+            if st.checkbox("Alle Bearbeitungen des aktuellen Studenten und ausgewählten Studiengangs"):
+                bearb = service.bearbeitungen_fuer_student(student_id, studiengang_id)
                 if bearb:
                     st.write(f"Gefunden {len(bearb)}")
                     st.json([
@@ -111,30 +113,26 @@ def render_debug_info(service, student_id):
                     st.warning("Keine Bearbeitungen gefunden")
 
             # ---------- Prüfungen ----------        
-            if st.checkbox("Prüfungen", key=f"debug_noten_{student_id}"):
-                bearbeitungen = getattr(service, "bearbeitungen_fuer_student", lambda _sid: [])(student_id)
-                rows = []
-
-                # Wir nutzen hier die Prüfungs-Repo-Funktion über den Workflow
-                pruef_repo = getattr(service._workflow, "_pruef", None)
-
-                if pruef_repo is not None and hasattr(pruef_repo, "get_by_bearbeitung_id"):
-                    for b in bearbeitungen:
-                        p = pruef_repo.get_by_bearbeitung_id(getattr(b, "id", None))
-                        if p:
-                            rows.append(
-                                {
-                                    "bearbeitung_id": b.id,
-                                    "kurs_id": b.kurs_id,
-                                    "note": p.note,
-                                    "bestanden": p.bestanden,
-                                    "type_bestanden": type(p.bestanden).__name__,
-                                    "versuch_nr": p.versuch_nr,
-                                    "letzter_versuch": p.letzter_versuch,
-                                }
-                            )
-                st.write(rows)
-
+            if st.checkbox("Alle Prüfungen des aktuellen Studenten und ausgewählten Studiengangs"):
+                pruefungen = service.pruefungen_fuer_student(student_id, studiengang_id)
+                
+                if pruefungen:
+                    st.write(f"Gefundene Prüfungen: {len(pruefungen)}")
+                    st.json([
+                        {
+                            "id": pruefung.id,
+                            "kurs": kurs.name,
+                            "pruefungsform": pruefung.pruefungsform,
+                            "versuch_nr": pruefung.versuch_nr,
+                            "note": pruefung.note,
+                            "bestanden": pruefung.bestanden,
+                            "letzter_versuch": pruefung.letzter_versuch,
+                
+                        }
+                        for _, kurs, pruefung in pruefungen
+                    ])
+                else:
+                    st.warning("Keine Prüfungen gefunden")
 
         except Exception as ex:
             st.error(f"Debug-Fehler: {ex}")

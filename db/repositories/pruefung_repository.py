@@ -1,8 +1,4 @@
 # db/repositories/pruefung_repository.py
-"""
-Interface für Pruefung-Entitäten.
-"""
-
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Optional
@@ -10,8 +6,18 @@ from models.pruefung import Pruefung
 
 
 class PruefungRepository(ABC):
-    """Abstraktes Repository für Pruefungen."""
-    
+    """
+    📦 LAGERVERWALTUNG (Prüfung)
+    - legt fest, welche Lager-Aktionen für die Zutat möglich sind, z.B.:
+      - finden (get_by_id)
+      - hinzufügen (create)
+      - entsorgen (delete)
+
+    Technisch:
+    - abstraktes Interface (Vertrag), keine SQLite-Details
+    - entkoppelt Services & UI von der konkreten Datenbank
+    - konkrete Implementierungen (z.B. SQLiteKursRepository) setzen diesen Vertrag um
+    """    
     @abstractmethod
     def get_by_id(self, pruefung_id: int) -> Optional[Pruefung]: 
         """Liefert eine Pruefung oder None, falls nicht vorhanden."""

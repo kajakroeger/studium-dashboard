@@ -9,10 +9,24 @@ from .kachel import kachel
 
 
 def render_status_uebersicht(vm: StatusUebersichtViewModel) -> None:
-    """Rendert die Status-Übersicht Kachel auf Basis des ViewModels."""
+    """
+    🥗💁‍♂️ DEKORATEUR 
+    - nimmt den fertigen Teller entgegen (ViewModel)
+    - serviert ihn optisch ansprechend (Layout + Visualisierung)
+    - visualisiert zusammenfassend den aktuellen Status des Studienfortschritts 
+
+    Technisch:
+    - arbeitet ausschließlich mit ViewModels (keine DTOs, keine Models)
+    - enthält keine Service-Aufrufe (kein WorkflowService/ProgressService)
+    - enthält keine Geschäftslogik (keine ECTS-/Noten-Berechnungen)
+    - stellt dar:
+        - Streamlit-Widgets
+        - Plotly-Figure bauen
+        - Styling, Achsen, Hover, Leerezustände anzeigen
+    """
     with kachel("STATUS ÜBERSICHT"):
 
-        ziel_ects = vm.ects_ziel
+        ziel_ects = vm.ects_gesamt
         ects_bestanden = vm.ects_bestanden
         ects_offen = vm.ects_offen
         avg_grade = vm.notenschnitt

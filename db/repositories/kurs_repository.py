@@ -1,8 +1,4 @@
 # db/repositories/kurs_repository.py
-"""
-Definiert das Interface für den Zugriff auf Kurs-Entitäten.
-Die UI/Services hängen nur von diesem Interface ab – nicht von SQLite."""
-
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Iterable, Optional
@@ -10,8 +6,18 @@ from models.kurs import Kurs
 
 
 class KursRepository(ABC):
-    """Abstraktes Repository für Kurse."""
+    """
+    📦 LAGERVERWALTUNG (Kurs)
+    - legt fest, welche Lager-Aktionen für die Zutat möglich sind, z.B.:
+      - finden (get_by_id)
+      - hinzufügen (create)
+      - entsorgen (delete)
 
+    Technisch:
+    - abstraktes Interface (Vertrag), keine SQLite-Details
+    - entkoppelt Services & UI von der konkreten Datenbank
+    - konkrete Implementierungen (z.B. SQLiteKursRepository) setzen diesen Vertrag um
+    """
     @abstractmethod
     def get_by_id(self, kurs_id: int) -> Optional[Kurs]: 
         """Liefert einen Kurs oder None, falls nicht vorhanden."""

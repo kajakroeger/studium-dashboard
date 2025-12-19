@@ -16,16 +16,26 @@ if TYPE_CHECKING:
 
 @dataclass
 class Semester:
-    """Repräsentiert ein Semester mit mehreren Kursen."""
+    """
+    🥦 ZUTAT / LEBENSMITTEL (DOMÄNENMODELL)
+    - repräsentiert ein Semester mit mehreren Kursen eines Studiums
+    - kennt nur seine eigenen Eigenschaften, keine Auswertungen, keine Darstellung
 
+    Technisch:
+    - reine Datenträger mit minimaler, fachlich sinnvoller Logik
+    - keine Datenbankzugriffe
+    - keine UI-Logik
+    - keine Aggregationen oder Berechnungen über mehrere Objekte
+    - wird von Repositories geladen/gespeichert
+    - wird von Services verarbeitet 
+    """
     nummer: int
     kurse: List[Kurs] = field(default_factory=list)
 
-    def kurs_hinzufuegen(self, kurs: Kurs) -> None:
-        """Fügt dem Semester einen Kurs hinzu und setzt den Rückverweis."""
+    def kurs_hinzufuegen(self, kurs: "Kurs") -> None:
+        """Fügt dem Semester einen Kurs hinzu und setzt die Semester-Nummer im Kurs."""
         self.kurse.append(kurs)
-        kurs.semester = self  
-        print(f"📘 Kurs '{kurs.name}' wurde Semester {self.nummer} hinzugefügt.")
+        kurs.semester_nr = self.nummer  
 
     def __str__(self) -> str:
         return f"Semester {self.nummer} ({len(self.kurse)} Kurse)"

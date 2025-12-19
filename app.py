@@ -1,15 +1,22 @@
+# app.py
 """
-ui/app.py
-Streamlit-Einstieg: baut Service, setzt Page Config, rendert Dashboard-Seite.
-Start:
-    streamlit run ui/app.py
-"""
-import streamlit as st
+🚪RESTAURANT-EINGANG 
+- öffnet das Restaurant (startet die App)
+- baut die Küche zusammen (Services + ViewModelBuilder via setup)
+- entscheidet, in welchem Servierstil serviert wird (UI_BACKEND / Renderer)
+- startet den Service (renderer(vm_builder))
 
-from core.viewmodel_builder import ViewModelBuilder
+Technisch:
+- Einstiegspunkt für Streamlit
+- zum Starten: streamlit run app.py
+- initialisiert Infrastruktur über ui.setup (ohne DB-Details im UI-Code)
+- wählt das UI-Backend über get_dashboard_renderer(...)
+- triggert das Rendering des Dashboards
+"""
+
 from ui.setup import build_service
 from ui.components.ui_adapter import get_dashboard_renderer
-from ui.theming import apply_global_theme
+# from ui.theme import apply_global_theme
 
 
 UI_BACKEND = "streamlit"
@@ -25,7 +32,7 @@ def main() -> None:
     # Dashboard rendern
     renderer(vm_builder)
     
-    # apply_global_theme()
+    # theme()
 
 if __name__ == "__main__":
     main()

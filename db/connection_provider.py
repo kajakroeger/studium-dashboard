@@ -18,14 +18,33 @@ from typing import Protocol, Iterator, Any
 
 
 class DBConnection(Protocol):
-    """Minimales Protokoll für eine DB-Verbindung (DB-API-ähnlich)."""
+    """
+    🚪 LAGERZUGANG / TÜR
+    - definiert, WIE ein Lager betreten wird (Verbindung öffnen/schließen)
+    - kennt KEINE Lebensmittel, KEINE Regale, KEINE Fachlogik
+    - stellt nur den Zugang bereit
+
+    Technisch:
+    - Abstraktion für Datenbank-Verbindungen
+    - Repositories kennen nur dieses Interface, nicht SQLite direkt
+    - erlaubt späteren Wechsel (z. B. SQLite → PostgreSQL), ohne Repositories zu ändern
+    """
     def execute(self, sql: str, params: tuple[Any, ...] | list[Any] | None = ...) -> Any: ...
     def commit(self) -> None: ...
     def close(self) -> None: ...
 
-
 class ConnectionProvider(ABC):
-    """Abstraktes Interface, das konkrete Provider (SQLite, Postgres, …) implementieren."""
+    """
+    👨‍💼🗝️ LAGERMEISTER 
+    - kann Lager öffnen und schließen
+    - nutzt bei Bedarf verschiedene Schlüssel
+    - stellt nur den Zugang bereit
+
+    Technisch:
+    - abstraktes Interface für Datenbank-Zugriff
+    - konkrete Implementierungen (SQLite, Postgres, …) regeln das WIE
+      bzw. welchen Schlüssel der Lagermeister nutzt
+    """
 
     @abstractmethod
     def get_connection(self) -> DBConnection:
@@ -44,14 +63,15 @@ class ConnectionProvider(ABC):
     @contextmanager
     def connect(self) -> Iterator[DBConnection]:
         """
-        Kontextmanager für bequemen & sicheren Verbindungsumgang.
-        Beispiel:
+        Kontextmanager für bequemen & sicheren Verbindungsumgang mit:
             with provider.connect() as conn:
                 conn.execute("INSERT ...")
                 conn.commit()
         """
+        # Verbindung aufbauen
         conn = self.get_connection()
         try:
             yield conn
         finally:
+            # Verbindung schließen
             self.close_connection(conn)

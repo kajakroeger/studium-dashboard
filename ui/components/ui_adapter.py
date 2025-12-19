@@ -1,14 +1,18 @@
 from __future__ import annotations
 from typing import Protocol
 
-from core import get_progress_service, get_workflow_service
 from core.viewmodel_builder import ViewModelBuilder
-
 
 class UIAdapter(Protocol):
     """
-    Ein Renderer, der das Dashboard zeichnet.
-    Signatur: (vm_builder) -> None
+    ❇️ SERVIERSTIL
+    - legt den Stil des Restaurants fest bzw. wie die Gerichte präsentiert werden
+      z.B. Essen im Dunkeln (CLI, keine visuelle Darstellung), Streamlit (offene Showküche, da direkte Rückmeldung)
+
+    Technisch:
+    - beschreibt, wie ein UI-Backend das Dashboard rendert
+    - nimmt einen ViewModelBuilder (Anrichter) entgegen
+    - das UI-Backend bleibt damit leicht austauschbar
     """
     def __call__(self, vm_builder: ViewModelBuilder) -> None:
         ...
@@ -16,8 +20,15 @@ class UIAdapter(Protocol):
 
 def get_dashboard_renderer(ui_backend: str) -> UIAdapter:
     """
-    Gibt die passende Render-Funktion zurück.
-    Lädt die Services erst bei tatsächlicher Nutzung.
+    ❇️ SERVIERSTIL-AUSWAHL 
+    - wählt die konkrete Präsentationsform (UI-Backend)
+    - aktuell Sreamlit
+    - möglich Alternativen: CLI, Web, Mobile, Export (PDF)
+
+    Technisch:
+    - gibt eine Render-Funktion zurück, die dem UIAdapter-Protocol entspricht
+    - nutzt Lazy Imports: das konkrete Backend-Modul wird erst importiert,
+      wenn es wirklich ausgewählt wurde (entkoppelt Backends)
     """
 
     if ui_backend == "streamlit":

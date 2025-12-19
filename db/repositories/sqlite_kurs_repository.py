@@ -1,13 +1,5 @@
 # db/repositories/sqlite_kurs_repository.py
-"""
-SQLite-Implementierung des KursRepository.
-- Nutzt ConnectionProvider (bleibt dadurch DB-agnostisch auf Interface-Ebene)
-- Verwendet sqlite3.Row (dict-ähnlicher Zugriff)
-- Enthält Mapping-Funktionen DB <-> Model
-"""
-
 from __future__ import annotations
-import sqlite3
 from typing import Iterable, Optional
 
 from db import ConnectionProvider
@@ -16,35 +8,53 @@ from .kurs_repository import KursRepository
 
 
 class SQLiteKursRepository(KursRepository):
-    """Konkreter SQLite-Adapter für KursRepository."""
+    """
+    📦💁‍♂️ REGALMANAGER (Kurs) 
+    - führt Aktionen mit der Zutat 'Kurs' aus z.B. finden, hinzufügen und entfernen,  
+
+    Technisch:
+    - Konkreter SQLite-Adapter für KursRepository.
+    - Nutzt ConnectionProvider (bleibt dadurch DB-agnostisch auf Interface-Ebene)
+    - Verwendet über den ConnectionProvider sqlite3 
+    - Enthält Mapping-Funktionen DB <-> Model
+    """
     def __init__(self, provider: ConnectionProvider) -> None:
         self._provider = provider
-        self.provider = provider
-        self._ensure_table()
+        self._ensure_schema()
 
-    # Datenbanktabelle anlegen, falls sie noch nicht existiert 
-    def _ensure_table(self) -> None:
-        sql = """
-        CREATE TABLE IF NOT EXISTS kurs (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            kurs_kuerzel TEXT NOT NULL,
-            ects INTEGER NOT NULL,
-            tutor TEXT,
-            semester INTEGER
-        );
-        """
+    def _ensure_schema(self) -> None:
+        """Erstellt die Tabelle 'kurs', sofern sie noch nicht existiert."""
         with self._provider.connect() as conn:
-            conn.execute(sql)
-            # Duplikate verhindern: Name und Kürzel dürfen beide einzeln nicht doppelt vorkommen
-            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_kurs_name ON kurs(name);")
-            conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_kurs_kuerzel ON kurs(kurs_kuerzel);")
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS kurs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    kurs_kuerzel TEXT NOT NULL,
+                    ects INTEGER NOT NULL,
+                    tutor TEXT,
+                    semester INTEGER,
+                    studiengang_id INTEGER NOT NULL
+                );
+            """)
 
-    # Public API 
+            # Unique pro Studiengang
+            conn.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_kurs_name_sg
+                ON kurs(name, studiengang_id);
+            """)
+            conn.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_kurs_kuerzel_sg
+                ON kurs(kurs_kuerzel, studiengang_id);
+            """)
+
+            conn.commit()
+
+    # ------------------- CRUD -------------------
+
     def get_by_id(self, kurs_id: int) -> Optional[Kurs]:
         with self._provider.connect() as conn:
             row = conn.execute(
-                "SELECT id, name, kurs_kuerzel, ects, tutor, semester FROM kurs WHERE id=?",
+                "SELECT id, name, kurs_kuerzel, ects, tutor, semester, studiengang_id FROM kurs WHERE id=?",
                 (kurs_id,),
             ).fetchone()
         return None if row is None else self._row_to_model(row)
@@ -52,29 +62,32 @@ class SQLiteKursRepository(KursRepository):
     def list_all(self) -> Iterable[Kurs]:
         with self._provider.connect() as conn:
             rows = conn.execute(
-                "SELECT id, name, kurs_kuerzel, ects, tutor, semester FROM kurs ORDER BY name"
+                "SELECT id, name, kurs_kuerzel, ects, tutor, semester, studiengang_id FROM kurs ORDER BY name"
             ).fetchall()
         return [self._row_to_model(r) for r in rows]
 
     def create(self, kurs: Kurs) -> int:
-        try:    
-            with self._provider.connect() as conn:
-                cur = conn.execute(
-                    "INSERT INTO kurs (name, kurs_kuerzel, ects, tutor, semester) VALUES (?,?,?,?,?)",
-                    (kurs.name, kurs.kurs_kuerzel, kurs.ects, getattr(kurs, "tutor", None), getattr(kurs.semester, "nummer", None)),
-                )
-                conn.commit()
-                new_id = int(cur.lastrowid)  
-            kurs.id = new_id
-            return new_id
-        except sqlite3.IntegrityError as e:
-            raise ValueError("Kurs mit diesem Namen oder Kürzel existiert bereits.") from e
+        if self.exists_by_name(kurs.name, kurs.studiengang_id):
+            raise ValueError("Kursname existiert bereits (in diesem Studiengang).")
+        if self.exists_by_kuerzel(kurs.kurs_kuerzel, kurs.studiengang_id):
+            raise ValueError("Kurskürzel existiert bereits (in diesem Studiengang).")
+
+        with self._provider.connect() as conn:
+            cur = conn.execute(
+                "INSERT INTO kurs (name, kurs_kuerzel, ects, tutor, semester, studiengang_id) VALUES (?,?,?,?,?,?)",
+                (kurs.name, kurs.kurs_kuerzel, kurs.ects, kurs.tutor, kurs.semester_nr, kurs.studiengang_id),
+            )
+            conn.commit()
+            new_id = int(cur.lastrowid)  
+        kurs.id = new_id
+        return new_id
+
 
     def update(self, kurs: Kurs) -> None:
         with self._provider.connect() as conn:
             conn.execute(
-                "UPDATE kurs SET name=?, kurs_kuerzel=?, ects=?, tutor=?, semester=? WHERE id=?",
-                (kurs.name, kurs.kurs_kuerzel, kurs.ects, getattr(kurs, "tutor", None), getattr(kurs.semester, "nummer", None), getattr(kurs, "id", None)),
+                "UPDATE kurs SET name=?, kurs_kuerzel=?, ects=?, tutor=?, semester=?, studiengang_id=? WHERE id=?",
+                (kurs.name, kurs.kurs_kuerzel, kurs.ects, kurs.tutor, kurs.semester_nr, kurs.studiengang_id, kurs.id),
             )
             conn.commit()
 
@@ -85,20 +98,34 @@ class SQLiteKursRepository(KursRepository):
 
 
     # ----- Existenzprüfungen -----
-    def exists_by_name(self, name: str) -> bool:
-        """Prüft, ob ein Kurs mit dem gegebenen Namen existiert."""
-        sql = "SELECT 1 FROM kurs WHERE LOWER(name) = LOWER(?) COLLATE NOCASE LIMIT 1;"
-        with self._provider.connect() as conn:  
-            return conn.execute(sql, (name,)).fetchone() is not None
+    def exists_by_name(self, name: str, studiengang_id: Optional[int] = None) -> bool:
+        """Prüft, ob ein Kurs mit dem gegebenen Namen existiert (optional je Studiengang)."""
+        name_norm = name.strip()
+        if studiengang_id is None:
+            sql = "SELECT 1 FROM kurs WHERE name = ? COLLATE NOCASE LIMIT 1;"
+            params = (name_norm,)
+        else:
+            sql = "SELECT 1 FROM kurs WHERE name = ? COLLATE NOCASE AND studiengang_id = ? LIMIT 1;"
+            params = (name_norm, studiengang_id)
 
-    def exists_by_kuerzel(self, kurs_kuerzel: str) -> bool:
-        """Prüft, ob ein Kurs mit dem gegebenen Kürzel existiert."""
-        sql = "SELECT 1 FROM kurs WHERE LOWER(kurs_kuerzel) = LOWER(?) COLLATE NOCASE LIMIT 1;"
         with self._provider.connect() as conn:
-            return conn.execute(sql, (kurs_kuerzel,)).fetchone() is not None
+            return conn.execute(sql, params).fetchone() is not None
 
 
-    # Mapping-Helfer
+    def exists_by_kuerzel(self, kurs_kuerzel: str, studiengang_id: Optional[int] = None) -> bool:
+        """Prüft, ob ein Kurs mit dem gegebenen Kürzel existiert (optional je Studiengang)."""
+        kuerzel_norm = kurs_kuerzel.strip()
+        if studiengang_id is None:
+            sql = "SELECT 1 FROM kurs WHERE kurs_kuerzel = ? COLLATE NOCASE LIMIT 1;"
+            params = (kuerzel_norm,)
+        else:
+            sql = "SELECT 1 FROM kurs WHERE kurs_kuerzel = ? COLLATE NOCASE AND studiengang_id = ? LIMIT 1;"
+            params = (kuerzel_norm, studiengang_id)
+
+        with self._provider.connect() as conn:
+            return conn.execute(sql, params).fetchone() is not None
+
+
     @staticmethod
     def _row_to_model(row) -> Kurs:
         """Konvertiert eine sqlite3.Row in ein Kurs-Objekt."""
@@ -108,5 +135,6 @@ class SQLiteKursRepository(KursRepository):
             kurs_kuerzel=row["kurs_kuerzel"],
             ects=row["ects"],
             tutor=row["tutor"],
-            semester=row["semester"],  # Falls du Semester-Objekte laden willst, später via SemesterRepo verknüpfen
+            semester_nr=int(row["semester"]) if row["semester"] is not None else None,
+            studiengang_id=row["studiengang_id"],
         )

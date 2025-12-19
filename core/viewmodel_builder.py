@@ -1,12 +1,21 @@
-# core/viewmodel_builder.py
+# core/viewmodel_builder.py 
+# Factory/Mapper für ViewModels.
+
+# - Ruft vorbereitete DTOs aus ProgressService ab 
+# - Wandelt DTOs in UI-fertige ViewModels um:
+#   * Formatierung (Datumsstrings, Labels)
+#   * Flags (hat_daten, fehlermeldung)
+
+# - DB-Zugriffe liegen im WorkflowService/Repos
+# - fachliche Berechnungen liegen im ProgressService
+
 from __future__ import annotations
 from datetime import date
 from typing import List, Optional, Tuple
 
-from core.dtos import BearbeitungszeitenAnalyse, NotenAnalyse
 from core.workflow_service import WorkflowService
 from core.progress_service import ProgressService
-from models.bearbeitung import StatusBearbeitung
+
 from .view_models import (
     BearbeitungsverlaufEintrag,
     NotenverlaufViewModel,
@@ -22,8 +31,25 @@ from .view_models import (
 
 class ViewModelBuilder:
     """
-    Factory für ViewModels.
-    Zentraler Ort für die Daten-Vorbereitung (UI-unabhängig).
+    💁‍♂️🍽️ PORTIONIERER
+    - nimmt vorbereitete Gerichte aus dem Kühlschrank (DTOs der ProgressServices)
+    - richtet sie für den Gast an:
+       - übersetzt DTOs in ViewModels
+       - ergänzt UI-spezifische Felder (Flags, Texte, Formatierungen)
+
+    - Bindeglied zwischen Fachlogik (ProgressService) und Darstellung (UI)
+    - sorgt dafür, dass die UI ausschließlich mit ViewModels arbeitet
+
+    Technisch:
+    - ruft ausschließlich *_daten()-Methoden des ProgressService auf
+    - erzeugt ViewModels (keine DTOs, keine Models)
+    - enthält KEINE Geschäftslogik (keine Berechnungen von Noten/ECTS)
+    - enthält KEINE Datenbankzugriffe
+    - enthält leichte Präsentationslogik:
+      - Flags wie hat_daten / hat_ziel / hat_einschreibung
+      - Texte für leere Zustände
+      - Listen/Strukturen passend für Charts & Tabellen
+
     """
 
     def __init__(
@@ -35,32 +61,6 @@ class ViewModelBuilder:
         self.workflow = workflow_service
         self.progress = progress_service
 
-        # ✅ Zwei separate Caches
-        self._cache_bearbeitung: dict[int, BearbeitungszeitenAnalyse] = {}
-        self._cache_noten: dict[int, NotenAnalyse] = {}
-
-    # ---------------------------------------------------------------------
-    # Cache-Methoden
-    # ---------------------------------------------------------------------
-
-    def _lade_bearbeitungsanalyse(self, student_id: int) -> BearbeitungszeitenAnalyse:
-        """
-        ✅ FIXED: Gibt jetzt BearbeitungszeitenAnalyse-Objekt zurück!
-        """
-        if student_id not in self._cache_bearbeitung:
-            self._cache_bearbeitung[student_id] = \
-                self.progress.bearbeitungszeiten_analyse(student_id)
-        return self._cache_bearbeitung[student_id]
-
-    def _lade_notenanalyse(self, student_id: int) -> NotenAnalyse:
-        """
-        ✅ NEU: Cache für Noten-Analyse.
-        """
-        if student_id not in self._cache_noten:
-            self._cache_noten[student_id] = \
-                self.progress.noten_analyse(student_id)
-        return self._cache_noten[student_id]
-
     # =====================================================================
     # 1) Studienziele
     # =====================================================================
@@ -71,31 +71,27 @@ class ViewModelBuilder:
         studiengang_id: Optional[int] = None,
     ) -> StudienzieleViewModel:
         try:
-            einschreibung = self.workflow.aktive_einschreibung(student_id)
+            daten = self.progress.studienziele_daten(student_id, studiengang_id)
+            if not daten:
+                return StudienzieleViewModel(
+                    hat_einschreibung=False,
+                    fehlermeldung="Keine aktive Einschreibung gefunden.",
+                )
+
+            ziel_enddatum = daten.ziel_enddatum
+
+            return StudienzieleViewModel(
+                ziel_notenschnitt=daten.ziel_notenschnitt,
+                ziel_enddatum=ziel_enddatum,
+                hat_einschreibung=True,
+                fehlermeldung=None,
+            )
+
         except Exception as e:
             return StudienzieleViewModel(
                 hat_einschreibung=False,
                 fehlermeldung=str(e),
             )
-
-        if not einschreibung:
-            return StudienzieleViewModel(
-                hat_einschreibung=False,
-                fehlermeldung="Keine aktive Einschreibung gefunden.",
-            )
-
-        ziel_enddatum_str = (
-            einschreibung.ziel_enddatum.strftime("%d.%m.%Y")
-            if einschreibung.ziel_enddatum
-            else None
-        )
-
-        return StudienzieleViewModel(
-            ziel_enddatum=einschreibung.ziel_enddatum,
-            ziel_enddatum_str=ziel_enddatum_str,
-            ziel_notenschnitt=einschreibung.ziel_notenschnitt,
-            hat_einschreibung=True,
-        )
 
     # =====================================================================
     # 2) Studienziele Status
@@ -104,31 +100,51 @@ class ViewModelBuilder:
     def build_studienziele_status(
         self,
         student_id: int,
+        studiengang_id: Optional[int] = None,
         ziel_tage_pro_5ects: float = 30.0,
     ) -> StudienzieleStatusViewModel:
         """
-        ✅ FIXED: Nutzt beide Caches und übergibt sie an Services!
+        
         """
         try:
-            # 🎯 Beide Analysen einmal laden (cached)
-            noten_analyse = self._lade_notenanalyse(student_id)
-            bearbeitung_analyse = self._lade_bearbeitungsanalyse(student_id)
-            
-            # Services mit gecachten Daten füttern
-            noten_status = self.progress.berechne_notenziel_status(
+            daten = self.progress.studienziele_status_daten(
                 student_id,
-                noten_analyse=noten_analyse,  # ✅ Cache!
-            )
-            tempo_status = self.progress.berechne_tempo_status(
-                student_id,
-                analyse=bearbeitung_analyse,  # ✅ Cache!
+                studiengang_id,
                 ziel_tage_pro_5ects=ziel_tage_pro_5ects,
             )
-            
+
+            return StudienzieleStatusViewModel(
+                # Noten-Felder 
+                aktueller_schnitt=daten.aktueller_schnitt,
+                ziel_note=daten.ziel_note,
+                benoetigte_note_naechster_kurs=daten.benoetigte_note_naechster_kurs,
+                benoetigter_durchschnitt_rest=daten.benoetigter_durchschnitt_rest,
+                best_moeglicher_schnitt_naechster_kurs=daten.best_moeglicher_schnitt_naechster_kurs,
+                rest_kurse=daten.rest_kurse,
+                anzahl_noten=daten.anzahl_noten,
+                ziel_erreicht=daten.ziel_erreicht,
+                naechster_besserer_schnitt=daten.naechster_besserer_schnitt,
+                note_fuer_minimale_verbesserung=daten.note_fuer_minimale_verbesserung,
+                
+                # Tempo-Felder 
+                ist_tage_pro_5ects=daten.ist_tage_pro_5ects,
+                ziel_tage_pro_5ects=daten.ziel_tage_pro_5ects,
+                tempo_abweichung=daten.tempo_abweichung,
+                prognose_enddatum=daten.prognose_enddatum,
+                diff_tage_zum_ziel=daten.diff_tage_zum_ziel,
+                
+                # Flags
+                hat_ziel_note=(daten.ziel_note is not None),
+                hat_tempo_daten=(daten.ist_tage_pro_5ects is not None),
+                
+                fehlermeldung=None,
+            )
+
         except Exception as e:
             print("Fehler in build_studienziele_status:", e)
             import traceback
             traceback.print_exc()
+            
             return StudienzieleStatusViewModel(
                 aktueller_schnitt=None,
                 ziel_note=None,
@@ -138,36 +154,17 @@ class ViewModelBuilder:
                 rest_kurse=None,
                 anzahl_noten=0,
                 ziel_erreicht=False,
+                hat_ziel_note=False,
+                hat_tempo_daten=False,
                 ist_tage_pro_5ects=None,
                 ziel_tage_pro_5ects=ziel_tage_pro_5ects,
                 tempo_abweichung=None,
                 prognose_enddatum=None,
                 diff_tage_zum_ziel=None,
-                hat_ziel_note=False,
-                hat_tempo_daten=False,
+                naechster_besserer_schnitt=None,
+                note_fuer_minimale_verbesserung=None,
                 fehlermeldung=str(e),
             )
-
-        return StudienzieleStatusViewModel(
-            aktueller_schnitt=noten_status.aktueller_schnitt,
-            ziel_note=noten_status.ziel_note,
-            benoetigte_note_naechster_kurs=noten_status.benoetigte_note_naechster_kurs,
-            benoetigter_durchschnitt_rest=noten_status.benoetigter_durchschnitt_rest,
-            best_moeglicher_schnitt_naechster_kurs=noten_status.best_moeglicher_schnitt_naechster_kurs,
-            rest_kurse=noten_status.rest_kurse,
-            anzahl_noten=noten_status.anzahl_noten,
-            ziel_erreicht=noten_status.ziel_erreicht,
-            ist_tage_pro_5ects=tempo_status.ist_tage_pro_5ects,
-            ziel_tage_pro_5ects=ziel_tage_pro_5ects,
-            tempo_abweichung=tempo_status.tempo_abweichung,
-            prognose_enddatum=tempo_status.prognose_enddatum,
-            diff_tage_zum_ziel=tempo_status.diff_tage_zum_ziel,
-            hat_ziel_note=(noten_status.ziel_note is not None),
-            hat_tempo_daten=(tempo_status.ist_tage_pro_5ects is not None),
-            naechster_besserer_schnitt=noten_status.naechster_besserer_schnitt,
-            note_fuer_minimale_verbesserung=noten_status.note_fuer_minimale_verbesserung,
-            fehlermeldung=None,
-        )
 
     # =====================================================================
     # 3) Status-Übersicht
@@ -179,37 +176,42 @@ class ViewModelBuilder:
         studiengang_id: Optional[int] = None,
     ) -> StatusUebersichtViewModel:
         """
-        ✅ FIXED: Nutzt beide Caches.
+        ✅ FIXED: Greift direkt auf flache Felder von StatusUebersichtDaten zu.
+        Keine verschachtelten Objekte mehr (kein .ects, .noten, .tempo)!
         """
         vm = StatusUebersichtViewModel()
-
+        
         try:
-            # ✅ Analysen aus Cache
-            ects = self.progress.ects_analyse(student_id)
-            noten = self._lade_notenanalyse(student_id)
-            tempo = self._lade_bearbeitungsanalyse(student_id)
+            daten = self.progress.status_uebersicht_daten(student_id, studiengang_id)
 
-            vm.ects_ziel = ects.ects_gesamt
-            vm.ects_bestanden = ects.ects_bestanden
-            vm.ects_offen = ects.ects_offen
-            vm.ects_prozent = ects.ects_prozent
-            vm.hat_studiengang = ects.ects_gesamt is not None
+            # ✅ Direkte Feld-Zugriffe (flaches DTO!)
+            vm.ects_gesamt = daten.ects_gesamt
+            vm.ects_bestanden = daten.ects_bestanden
+            vm.ects_offen = daten.ects_offen
+            vm.ects_prozent = daten.ects_prozent
 
-            vm.notenschnitt = noten.aktueller_schnitt
-            vm.bearbeitungszeit_pro_5ects = tempo.normiert_pro_5ects
+            vm.notenschnitt = daten.notenschnitt
+            vm.bearbeitungszeit_pro_5ects = daten.bearbeitungszeit_pro_5ects
 
-            vm.hat_daten = any([
-                vm.ects_ziel is not None,
-                vm.ects_bestanden is not None,
-                vm.notenschnitt is not None,
-                vm.bearbeitungszeit_pro_5ects is not None,
-            ])
+            vm.hat_studiengang = (daten.ects_gesamt is not None)
+            vm.hat_daten = any(
+                v is not None
+                for v in [
+                    vm.ects_gesamt,
+                    vm.ects_bestanden,
+                    vm.notenschnitt,
+                    vm.bearbeitungszeit_pro_5ects,
+                ]
+            )
 
+            vm.fehlermeldung = None
             return vm
+
         except Exception as e:
             print("Fehler in build_status_uebersicht:", e)
             import traceback
             traceback.print_exc()
+            
             vm.hat_daten = False
             vm.fehlermeldung = str(e)
             return vm
@@ -218,99 +220,56 @@ class ViewModelBuilder:
     # 4) Burndown Chart
     # =====================================================================
 
-    def build_burndown_chart(
-        self,
-        student_id: int,
-        studiengang_id: Optional[int] = None,
-    ) -> BurndownViewModel:
+    def build_burndown_chart(self, student_id: int, studiengang_id: Optional[int]) -> BurndownViewModel:
         """
-        ✅ FIXED: Nutzt abgeschlossene_bearbeitungen() aus WorkflowService!
+        Holt Rohdaten aus ProgressService, macht nur noch UI-Kurve/Labels.
         """
         try:
-            studiengaenge = self.workflow.studiengaenge_by_student_id(student_id)
-            if not studiengaenge:
-                return self._empty_burndown("Kein Studiengang gefunden")
+            daten = self.progress.burndown_daten(student_id, studiengang_id)
 
-            ziel_ects = float(studiengaenge[0].ects_gesamt or 0)
-            if ziel_ects <= 0:
-                return self._empty_burndown("Kein ECTS-Ziel hinterlegt")
-
-            einschreibung = self.workflow.aktive_einschreibung(student_id)
-            if not einschreibung:
-                return self._empty_burndown("Keine Einschreibung gefunden")
-
-            start_datum = (
-                einschreibung.start_datum.replace(day=1)
-                if einschreibung.start_datum
-                else date.today().replace(day=1)
-            )
-            ziel_enddatum = einschreibung.ziel_enddatum
-
-            # ✅ FIXED: Nutzt abgeschlossene_bearbeitungen aus WorkflowService
-            abgeschlossene_ab = self.workflow.abgeschlossene_bearbeitungen(student_id)
-            abgeschlossene: List[Tuple[date, str, int]] = []
-
-            for ab in abgeschlossene_ab:
-                b = ab.bearbeitung
-                kurs = ab.kurs
-                
-                if not b.abgabe_datum:
-                    continue
-                if not kurs or not getattr(kurs, "ects", None):
-                    continue
-
-                name = kurs.name
-                ects = int(kurs.ects)
-                abgeschlossene.append((b.abgabe_datum, name, ects))
-
-            if not abgeschlossene:
+            if not daten.abgeschlossene_kurse:
                 return self._empty_burndown("Noch keine abgeschlossenen Kurse")
 
-            # Sortieren nach Datum
-            abgeschlossene.sort(key=lambda x: x[0])
+            if not daten.ziel_ects or daten.ziel_ects <= 0:
+                return self._empty_burndown("Kein ECTS-Ziel hinterlegt")
 
-            # Enddatum bestimmen
-            last_completion = max((k[0] for k in abgeschlossene), default=None)
-
-            if ziel_enddatum:
-                end_datum = ziel_enddatum
-            elif last_completion:
-                tmp = last_completion.replace(day=1)
-                end_datum = self._add_months(tmp, 1)
+            # Enddatum robust bestimmen:
+            # - wenn ziel_enddatum vorhanden -> nehmen
+            # - sonst -> letzter Abschluss-Monat + 1 Monat
+            # - fallback -> start + 24 Monate
+            if daten.ziel_enddatum:
+                end = daten.ziel_enddatum
             else:
-                end_datum = self._add_months(start_datum, 24)
+                last = max((d for (d, _, _) in daten.abgeschlossene_kurse), default=None)
+                if last:
+                    end = self._add_months(last.replace(day=1), 1)
+                else:
+                    end = self._add_months(daten.start_datum.replace(day=1), 24)
 
-            months = self._generiere_monatsliste(start_datum, end_datum)
+            start = daten.start_datum.replace(day=1)
+            months = self._generiere_monatsliste(start, end)
 
             actual_rest, hover_texts, had_flags = self._berechne_ist_kurve(
-                months, ziel_ects, abgeschlossene
+                months, daten.ziel_ects, daten.abgeschlossene_kurse
             )
 
-            total_span = max(len(months) - 1, 1)
-            ideal_rest = [
-                max(ziel_ects - (ziel_ects * i / total_span), 0)
-                for i in range(len(months))
-            ]
-
-            monate_labels = [m.strftime("%b %Y") for m in months]
+            # Ideal-Kurve: von ziel_ects linear bis 0 (len-1 Schritte)
+            span = max(len(months) - 1, 1)
+            ideal_rest = [max(daten.ziel_ects - (daten.ziel_ects * i / span), 0) for i in range(len(months))]
 
             return BurndownViewModel(
-                monate_labels=monate_labels,
+                monate_labels=[m.strftime("%b %Y") for m in months],
                 ideal_verlauf=ideal_rest,
                 ist_verlauf=actual_rest,
                 ist_hover_texte=hover_texts,
                 ist_hat_daten_flags=had_flags,
-                ziel_ects=ziel_ects,
-                start_datum=start_datum,
-                end_datum=end_datum,
+                ziel_ects=daten.ziel_ects,
+                start_datum=start,
+                end_datum=end,
                 hat_daten=True,
                 fehlermeldung=None,
             )
-
         except Exception as e:
-            print("Fehler in build_burndown_chart:", e)
-            import traceback
-            traceback.print_exc()
             return self._empty_burndown(str(e))
 
     def _empty_burndown(self, fehler: str) -> BurndownViewModel:
@@ -329,11 +288,12 @@ class ViewModelBuilder:
 
     def _generiere_monatsliste(self, start: date, end: date) -> List[date]:
         months: List[date] = []
-        cur = start
+        cur = start.replace(day=1)
+        end = end.replace(day=1)
         while cur <= end:
             months.append(cur)
             cur = self._add_months(cur, 1)
-        return months if months else [start]
+        return months if months else [start.replace(day=1)]
 
     def _berechne_ist_kurve(
         self,
@@ -361,6 +321,7 @@ class ViewModelBuilder:
                     kurse_in_monat.append((name, ects))
                     kurs_idx += 1
                 elif abgabe_monat_str < monat_str:
+                    # falls kurse unsortiert reinkommen (safety)
                     verbleibende_ects -= ects
                     kurs_idx += 1
                 else:
@@ -372,17 +333,14 @@ class ViewModelBuilder:
 
             monat_display = monat.strftime("%b %Y")
             if kurse_in_monat:
-                kurse_text = "<br>".join(
-                    [f"• {n} ({e} ECTS)" for n, e in kurse_in_monat]
-                )
+                kurse_text = "<br>".join([f"• {n} ({e} ECTS)" for n, e in kurse_in_monat])
                 hover_texts.append(
                     f"<b>{monat_display}</b><br><b>Abgeschlossen:</b><br>{kurse_text}<br>"
                     f"<b>Verbleiben noch {verbleibende_ects:.0f} ECTS</b>"
                 )
             else:
                 hover_texts.append(
-                    f"<b>{monat_display}</b><br>"
-                    f"Verbleibende ECTS: {verbleibende_ects:.0f}"
+                    f"<b>{monat_display}</b><br>Verbleibende ECTS: {verbleibende_ects:.0f}"
                 )
 
         return actual_rest, hover_texts, had_flags
@@ -397,89 +355,39 @@ class ViewModelBuilder:
     # 5) Notenverlauf
     # =====================================================================
 
-    def build_notenverlauf(
-        self,
-        student_id: int,
-        studiengang_id: Optional[int] = None,
-    ) -> NotenverlaufViewModel:
-        """
-        ✅ OPTIMIERT: Nutzt abgeschlossene_bearbeitungen().
-        """
+    def build_notenverlauf(self, student_id: int, studiengang_id: Optional[int]) -> NotenverlaufViewModel:
         try:
-            bearbeitungen = self.workflow.abgeschlossene_bearbeitungen(student_id)
+            daten = self.progress.notenverlauf_daten(student_id, studiengang_id)
 
-            kursnamen: List[str] = []
-            noten: List[float] = []
-            pruefungsformen: List[str] = []
-
-            for ab in bearbeitungen:
-                pruefung = ab.pruefung
-                kurs = ab.kurs
-
-                if not pruefung or not getattr(pruefung, "bestanden", False):
-                    continue
-                if pruefung.note is None:
-                    continue
-                if not kurs:
-                    continue
-
-                kuerzel = kurs.kurs_kuerzel or kurs.name
-                if len(kuerzel) > 20:
-                    kuerzel = kuerzel[:17] + "..."
-
-                kursnamen.append(kuerzel)
-                noten.append(float(pruefung.note))
-
-                pf_text = (
-                    pruefung.pruefungsform.value
-                    if getattr(pruefung, "pruefungsform", None)
-                    else "–"
-                )
-                pruefungsformen.append(pf_text)
-
-            if not noten:
+            if not daten.noten:
                 return NotenverlaufViewModel(
-                    kursnamen=[],
-                    noten=[],
-                    pruefungsformen=[],
-                    durchschnittsverlauf=[],
-                    durchschnitt=None,
-                    beste_note=None,
-                    anzahl_kurse=0,
                     hat_daten=False,
-                    fehlermeldung="Noch keine Noten vorhanden.",
+                    fehlermeldung="Noch keine Noten vorhanden."
                 )
 
-            # Laufender Durchschnitt
-            durchschnittsverlauf: List[float] = []
-            total = 0.0
-            for i, note in enumerate(noten, start=1):
-                total += note
-                durchschnittsverlauf.append(total / i)
+            # UI: Kursnamen ggf. kürzen
+            kursnamen_ui: List[str] = []
+            for name in daten.kursnamen:
+                label = name
+                if len(label) > 20:
+                    label = label[:17] + "..."
+                kursnamen_ui.append(label)
 
             return NotenverlaufViewModel(
-                kursnamen=kursnamen,
-                noten=noten,
-                pruefungsformen=pruefungsformen,
-                durchschnittsverlauf=durchschnittsverlauf,
-                durchschnitt=durchschnittsverlauf[-1],
-                beste_note=min(noten),
-                anzahl_kurse=len(noten),
+                kursnamen=kursnamen_ui,
+                noten=daten.noten,
+                pruefungsformen=daten.pruefungsformen,
+                durchschnittsverlauf=daten.durchschnittsverlauf,
+                durchschnitt=daten.aktueller_schnitt,
+                beste_note=daten.beste_note,
+                anzahl_kurse=len(daten.noten),
                 hat_daten=True,
                 fehlermeldung=None,
             )
-
         except Exception as e:
             return NotenverlaufViewModel(
-                kursnamen=[],
-                noten=[],
-                pruefungsformen=[],
-                durchschnittsverlauf=[],
-                durchschnitt=None,
-                beste_note=None,
-                anzahl_kurse=0,
                 hat_daten=False,
-                fehlermeldung=str(e),
+                fehlermeldung=str(e)
             )
 
     # =====================================================================
@@ -491,80 +399,45 @@ class ViewModelBuilder:
         student_id: int,
         studiengang_id: Optional[int] = None,
     ) -> BearbeitungsverlaufViewModel:
-        """
-        ✅ FIXED: Nutzt BearbeitungszeitenAnalyse-Objekt aus Cache.
-        """
+        vm = BearbeitungsverlaufViewModel()
         try:
-            bearbeitungen = self.workflow.bearbeitungen_fuer_student(student_id)
+            daten = self.progress.bearbeitungsverlauf_daten(student_id, studiengang_id)
 
-            bearbeitungen = [
-                b for b in bearbeitungen
-                if getattr(b, "status", None) == StatusBearbeitung.ABGESCHLOSSEN
-            ]
+            if not daten or not daten.eintraege:
+                vm.hat_daten = False
+                vm.fehlermeldung = "Noch keine abgeschlossenen Bearbeitungen vorhanden."
+                return vm
 
-            if not bearbeitungen:
-                return BearbeitungsverlaufViewModel(
-                    eintraege=[],
-                    hat_daten=False,
-                    fehlermeldung="Noch keine abgeschlossenen Bearbeitungen vorhanden.",
-                    durchschnitt=None,
-                    durchschnitt_verlauf=[],
-                )
+            for e in daten.eintraege:
+                kurs_label = e.kurs_kuerzel or e.kurs_name
 
-            eintraege: List[BearbeitungsverlaufEintrag] = []
-
-            for b in bearbeitungen:
-                kurs = self.workflow.kurs_by_id(b.kurs_id)
-                if not kurs:
-                    continue
-
-                kurs_label = kurs.kurs_kuerzel or kurs.name
-                dauer_tage = self.workflow.bearbeitungszeit_in_tagen(b)
-                status_text = getattr(b.status, "value", str(b.status))
-
-                eintraege.append(
+                vm.eintraege.append(
                     BearbeitungsverlaufEintrag(
                         kurs_label=kurs_label,
-                        start_datum=b.start_datum,
-                        abgabe_datum=b.abgabe_datum,
-                        dauer_tage=dauer_tage,
-                        status_text=status_text,
+                        start_datum=e.start_datum,
+                        abgabe_datum=e.abgabe_datum,
+                        dauer_tage=e.dauer_tage,
                     )
                 )
 
-            if not eintraege:
-                return BearbeitungsverlaufViewModel(
-                    eintraege=[],
-                    hat_daten=False,
-                    fehlermeldung="Noch keine Bearbeitungen vorhanden.",
-                    durchschnitt=None,
-                    durchschnitt_verlauf=[],
-                )
+            if not vm.eintraege:
+                vm.hat_daten = False
+                vm.fehlermeldung = "Noch keine Bearbeitungen vorhanden."
+                return vm
 
-            eintraege.sort(key=lambda e: (e.start_datum or date.min, e.kurs_label))
+            vm.eintraege.sort(key=lambda x: (x.start_datum or date.min, x.kurs_label))
 
-            # ✅ FIXED: Nutzt Objekt-Attribute statt dict-Keys
-            analyse = self._lade_bearbeitungsanalyse(student_id)
-            
-            return BearbeitungsverlaufViewModel(
-                eintraege=eintraege,
-                hat_daten=True,
-                fehlermeldung=None,
-                durchschnitt=analyse.durchschnitt_tage,
-                durchschnitt_verlauf=analyse.verlauf,
-            )
+            vm.durchschnitt = daten.durchschnitt
+            vm.durchschnitt_verlauf = list(daten.durchschnitt_verlauf)
+
+            vm.hat_daten = True
+            vm.fehlermeldung = None
+            return vm
 
         except Exception as e:
-            print("Fehler in build_bearbeitungsverlauf:", e)
-            import traceback
-            traceback.print_exc()
-            return BearbeitungsverlaufViewModel(
-                eintraege=[],
-                hat_daten=False,
-                fehlermeldung=str(e),
-                durchschnitt=None,
-                durchschnitt_verlauf=[],
-            )
+            vm.hat_daten = False
+            vm.fehlermeldung = str(e)
+            return vm
 
     # =====================================================================
     # 7) Kursplan Gantt
@@ -575,85 +448,41 @@ class ViewModelBuilder:
         student_id: int,
         studiengang_id: Optional[int] = None,
     ) -> KursplanViewModel:
+        vm = KursplanViewModel()
         try:
-            bearbeitungen = self.workflow.bearbeitungen_fuer_student(student_id)
+            daten = self.progress.kursplan_daten(student_id, studiengang_id)
 
-            eintraege: List[KursplanEintrag] = []
+            if not daten or not daten.eintraege:
+                vm.hat_daten = False
+                vm.fehlermeldung = "Noch keine Daten für den Kursplan vorhanden."
+                return vm
 
-            for b in bearbeitungen:
-                kurs = self.workflow.kurs_by_id(b.kurs_id)
-                if not kurs:
-                    continue
+            for e in daten.eintraege:
+                kursname = e.kurs_kuerzel or e.kurs_name
+                kurs_label = f"{(e.semester or 0)}. Sem – {kursname}" if e.semester else kursname
 
-                if not any([b.plan_start, b.plan_end, b.start_datum, b.abgabe_datum]):
-                    continue
-
-                kursname = kurs.kurs_kuerzel or kurs.name
-                kurs_label = (
-                    f"{(kurs.semester or 0)}. Sem – {kursname}"
-                    if kurs.semester
-                    else kursname
-                )
-
-                eintraege.append(
+                vm.eintraege.append(
                     KursplanEintrag(
-                        semester=kurs.semester,
+                        semester=e.semester or 0,
                         kurs_label=kurs_label,
-                        plan_start=b.plan_start,
-                        plan_end=b.plan_end,
-                        ist_start=b.start_datum,
-                        ist_end=b.abgabe_datum,
+                        plan_start=e.plan_start,
+                        plan_end=e.plan_end,
+                        ist_start=e.ist_start,
+                        ist_end=e.ist_end,
                     )
                 )
 
-            if not eintraege:
-                return KursplanViewModel(
-                    eintraege=[],
-                    semester_optionen=[],
-                    min_datum=None,
-                    max_datum=None,
-                    studium_start=None,
-                    studium_ende=None,
-                    hat_daten=False,
-                    fehlermeldung="Noch keine Daten für den Kursplan vorhanden.",
-                )
+            vm.semester_optionen = list(daten.semester_optionen)
+            vm.min_datum = daten.min_datum
+            vm.max_datum = daten.max_datum
+            vm.studium_start = daten.studium_start
+            vm.studium_ende = daten.studium_ende
 
-            semester_optionen = sorted(
-                {e.semester for e in eintraege if e.semester is not None}
-            )
-
-            alle_datumswerte: List[date] = []
-            for e in eintraege:
-                for d in [e.plan_start, e.plan_end, e.ist_start, e.ist_end]:
-                    if d:
-                        alle_datumswerte.append(d)
-
-            min_datum = min(alle_datumswerte) if alle_datumswerte else None
-            max_datum = max(alle_datumswerte) if alle_datumswerte else None
-
-            einschreibung = self.workflow.aktive_einschreibung(student_id)
-            studium_start = einschreibung.start_datum if einschreibung else None
-            studium_ende = einschreibung.ziel_enddatum if einschreibung else None
-
-            return KursplanViewModel(
-                eintraege=eintraege,
-                semester_optionen=semester_optionen,
-                min_datum=min_datum,
-                max_datum=max_datum,
-                studium_start=studium_start,
-                studium_ende=studium_ende,
-                hat_daten=True,
-                fehlermeldung=None,
-            )
+            vm.hat_daten = True
+            vm.fehlermeldung = None
+            return vm
 
         except Exception as e:
-            return KursplanViewModel(
-                eintraege=[],
-                semester_optionen=[],
-                min_datum=None,
-                max_datum=None,
-                studium_start=None,
-                studium_ende=None,
-                hat_daten=False,
-                fehlermeldung=str(e),
-            )
+            vm.hat_daten = False
+            vm.fehlermeldung = str(e)
+            return vm

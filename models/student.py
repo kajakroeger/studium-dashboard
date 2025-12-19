@@ -12,13 +12,17 @@ from models.einschreibung import Einschreibung
 @dataclass
 class Student:
     """
-    Repräsentiert einen Studierenden.
-    Attribute:
-        id: Eindeutige ID in der Datenbank
-        name: Vollständiger Name des Studierenden
-        matrikelnummer: Eindeutige Matrikelnummer
-        email: Private E-Mail-Adresse (optional)
-        uni_email: Universitätsadresse (optional)
+    👨‍💻 USER/GAST (DOMÄNENMODELL)
+    - repräsentiert einen Studierenden, der die UI bedient und sein Studium absolviert 
+    - kennt nur seine eigenen Eigenschaften, keine Auswertungen, keine Darstellung
+
+    Technisch:
+    - reine Datenträger mit minimaler, fachlich sinnvoller Logik
+    - keine Datenbankzugriffe
+    - keine UI-Logik
+    - keine Aggregationen oder Berechnungen über mehrere Objekte
+    - wird von Repositories geladen/gespeichert
+    - wird von Services verarbeitet 
     """
 
     name: str

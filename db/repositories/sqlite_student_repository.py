@@ -11,37 +11,41 @@ from __future__ import annotations
 from typing import Iterable, Optional
 
 # WICHTIG: innerhalb von db/... besser relative Importe verwenden:
-from ..connection_provider import ConnectionProvider
+from db import ConnectionProvider
 from .student_repository import StudentRepository
 from models import Student
 
 
 class SQLiteStudentRepository(StudentRepository):
-    """Konkreter SQLite-Adapter für StudentRepository."""
+    """
+    📦💁‍♂️ REGALMANAGER (Student) 
+    - führt Aktionen mit der Zutat 'Student' aus z.B. finden, hinzufügen und entfernen,  
 
+    Technisch:
+    - Konkreter SQLite-Adapter für KursRepository.
+    - Nutzt ConnectionProvider (bleibt dadurch DB-agnostisch auf Interface-Ebene)
+    - Verwendet über den ConnectionProvider sqlite3 
+    - Enthält Mapping-Funktionen DB <-> Model
+    """
     def __init__(self, provider: ConnectionProvider) -> None:
-        # ConnectionProvider wird injiziert – Repos kennen keine konkrete DB
         self._provider = provider
-        self._ensure_table()
+        self._ensure_schema()
 
-    # ---------- Schema (einmalig anlegen, idempotent) ----------
-
-    def _ensure_table(self) -> None:
+    def _ensure_schema(self) -> None:
         """Erstellt die Tabelle 'student', sofern sie noch nicht existiert."""
-        sql = """
-        CREATE TABLE IF NOT EXISTS student (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            matrikelnummer TEXT NOT NULL UNIQUE,
-            email TEXT,
-            uni_email TEXT
-        );
-        """
         with self._provider.connect() as conn:
-            conn.execute(sql)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS student (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    matrikelnummer TEXT NOT NULL UNIQUE,
+                    email TEXT,
+                    uni_email TEXT
+                )
+            """)
             conn.commit()
 
-    # ---------- CRUD-Methoden ----------
+    # ------------------- CRUD -------------------
 
     def get_by_id(self, student_id: int) -> Optional[Student]:
         """Liest einen Studenten per ID; None, wenn nicht vorhanden."""

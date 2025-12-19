@@ -1,15 +1,22 @@
 # db/repositories/einschreibung_repository.py
-"""
-Interface für Einschreibungen (speichert u. a. Studienziele pro Student).
-"""
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Optional, Iterable
 from models.einschreibung import Einschreibung
 
 class EinschreibungRepository(ABC):
-    """Abstraktes Repository für Einschreibungen."""
+    """
+    📦 LAGERVERWALTUNG (Einschreibung)
+    - legt fest, welche Lager-Aktionen für die Zutat möglich sind, z.B.:
+      - finden (get_by_id)
+      - hinzufügen (create)
+      - entsorgen (delete)
 
+    Technisch:
+    - abstraktes Interface (Vertrag), keine SQLite-Details
+    - entkoppelt Services & UI von der konkreten Datenbank
+    - konkrete Implementierungen (z.B. SQLiteKursRepository) setzen diesen Vertrag um
+    """
     @abstractmethod
     def get_by_id(self, einschreibung_id: int) -> Optional[Einschreibung]:
         """Liefert eine Einschreibung oder None"""

@@ -15,7 +15,22 @@ from .kachel import kachel
 
 
 def render_kursplan_gantt(vm: KursplanViewModel) -> None:
-    """Rendert den Kursplan (Gantt) auf Basis des KursplanViewModel."""
+    """
+    🥗💁‍♂️ DEKORATEUR 
+    - nimmt den fertigen Teller entgegen (ViewModel)
+    - serviert ihn optisch ansprechend (Layout + Visualisierung)
+    - visualisiert wann ein Kurs geplant ist zu starten und abzuschließen sowie
+      wann ein Kurs tatsächlich gestartet und abgeschlossen wurde
+
+    Technisch:
+    - arbeitet ausschließlich mit ViewModels (keine DTOs, keine Models)
+    - enthält keine Service-Aufrufe (kein WorkflowService/ProgressService)
+    - enthält keine Geschäftslogik (keine ECTS-/Noten-Berechnungen)
+    - stellt dar:
+        - Streamlit-Widgets
+        - Plotly-Figure bauen
+        - Styling, Achsen, Hover, Leerezustände anzeigen
+    """
     with kachel("KURSPLAN"):
 
         if not vm.hat_daten or not vm.eintraege:

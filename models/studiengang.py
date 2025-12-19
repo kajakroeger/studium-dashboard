@@ -12,8 +12,19 @@ from .semester import Semester
 
 @dataclass
 class Studiengang:
-    """Repräsentiert einen kompletten Studiengang (z. B. Informatik B.Sc.)."""
+    """
+    🥦 ZUTAT / LEBENSMITTEL (DOMÄNENMODELL)
+    - repräsentiert einen Studiengang 
+    - kennt nur seine eigenen Eigenschaften, keine Auswertungen, keine Darstellung
 
+    Technisch:
+    - reine Datenträger mit minimaler, fachlich sinnvoller Logik
+    - keine Datenbankzugriffe
+    - keine UI-Logik
+    - keine Aggregationen oder Berechnungen über mehrere Objekte
+    - wird von Repositories geladen/gespeichert
+    - wird von Services verarbeitet 
+    """
     name: str
     anzahl_monate: int
     anzahl_kurse: int

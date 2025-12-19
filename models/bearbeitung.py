@@ -15,14 +15,25 @@ class StatusBearbeitung(Enum):
     """Definiert die möglichen Status einer Bearbeitung."""
     INAKTIV = "inaktiv"
     AKTIV = "aktiv"
-    EINGEREICHT = "Prüfung eingereicht"
+    EINGEREICHT = "eingereicht"
     ABGESCHLOSSEN = "abgeschlossen"
 
 
 @dataclass
 class Bearbeitung:
-    """Repräsentiert eine Bearbeitung (z. B. Projekt, Hausarbeit) zu einem Kurs."""
+    """
+    🥦 ZUTAT / LEBENSMITTEL (DOMÄNENMODELL)
+    - repräsentiert die Bearbeitung eines Kurses im Studium
+    - kennt nur seine eigenen Eigenschaften, keine Auswertungen, keine Darstellung
 
+    Technisch:
+    - reine Datenträger mit minimaler, fachlich sinnvoller Logik
+    - keine Datenbankzugriffe
+    - keine UI-Logik
+    - keine Aggregationen oder Berechnungen über mehrere Objekte
+    - wird von Repositories geladen/gespeichert
+    - wird von Services verarbeitet 
+    """
     student_id: int
     kurs_id: int
     plan_start: Optional[date] = None                       # Geplantes Datum für den Start der Bearbeitung
@@ -30,7 +41,7 @@ class Bearbeitung:
     start_datum: Optional[date] = None   
     abgabe_datum: Optional[date] = None                     # Datum, an dem die Bearbeitung abgegeben wurde
     status:  StatusBearbeitung = StatusBearbeitung.INAKTIV  # Status der Bearbeitung
-    id: Optional[int] = None                # Primärschlüssel, wird von der DB gesetzt
+    id: Optional[int] = None                                # Primärschlüssel, wird von der DB gesetzt
 
 
     def kann_eingereicht_werden(self) -> bool:
@@ -46,11 +57,11 @@ class Bearbeitung:
             )
         
         self.abgabe_datum = abgabe_datum
-        self.status = StatusBearbeitung.eingereicht
+        self.status = StatusBearbeitung.EINGEREICHT
 
     def ist_abgeschlossen(self) -> bool:
         """Gibt True zurück, wenn die Bearbeitung abgeschlossen ist (d. h. Abgabedatum vorhanden)."""
-        return self.abgabe_datum is not None
+        return self.status == StatusBearbeitung.ABGESCHLOSSEN
 
     def bearbeitungszeit(self) -> Optional[int]:
         """Gibt die Bearbeitungszeit in Tagen zurück,falls Start- und Abgabedatum vorhanden sind."""

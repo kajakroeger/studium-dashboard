@@ -9,13 +9,7 @@ prüft automatisch, ob bestanden wurde, und handhabt bis zu 3 Versuche.
 from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
-
-from models.bearbeitung import Bearbeitung, StatusBearbeitung
-
-# Typing-Hinweis zur Vermeidung von zirkulären Importen
-if TYPE_CHECKING:
-    from models.bearbeitung import Bearbeitung
+from typing import Optional
 
 
 class Pruefungsform(Enum):
@@ -32,7 +26,19 @@ class Pruefungsform(Enum):
 
 @dataclass
 class Pruefung:
-    """Repräsentiert eine Prüfung (z. B. Klausur oder Projektprüfung) zu einer Bearbeitung."""
+    """
+    🥦 ZUTAT / LEBENSMITTEL (DOMÄNENMODELL)
+    - repräsentiert die Prüfung eines Kurses im Studium
+    - kennt nur seine eigenen Eigenschaften, keine Auswertungen, keine Darstellung
+
+    Technisch:
+    - reine Datenträger mit minimaler, fachlich sinnvoller Logik
+    - keine Datenbankzugriffe
+    - keine UI-Logik
+    - keine Aggregationen oder Berechnungen über mehrere Objekte
+    - wird von Repositories geladen/gespeichert
+    - wird von Services verarbeitet 
+    """
     pruefungsform: Pruefungsform
     bearbeitung_id: int = 0
     versuch_nr: int = 0
@@ -72,16 +78,11 @@ class Pruefung:
         # Prüfungsergebnis setzen
         if note <= 4.0:
             self.bestanden = True
-            self.bearbeitung.status = StatusBearbeitung.ABGESCHLOSSEN
-            print(f"✅ Prüfung bestanden im {self.versuch_nr}. Versuch (Note: {note}).")
         else:
             self.bestanden = False
-            print(f"❌ Prüfung NICHT bestanden im {self.versuch_nr}. Versuch (Note: {note}).")
-
             # Wenn 3 Versuche nicht bestanden → letzter Versuch erreicht
             if self.versuch_nr >= 3:
                 self.letzter_versuch = True
-                print("⚠️  Letzter Versuch erreicht — keine weiteren Prüfungen mehr möglich.")
 
     def __str__(self) -> str:
         """Lesbare Textdarstellung."""

@@ -1,39 +1,27 @@
-"""
-Datei: db/sqlite_connection_provider.py
-Beschreibung:
-Konkreter ConnectionProvider für SQLite.
-- Kümmert sich um Aufbau/Schließen der Verbindung
-- Aktiviert sinnvolle Defaults (Row-Factory, Foreign Keys)
-- Bleibt kompatibel zum abstrakten Interface (ConnectionProvider)
-
-Verwendung (Beispiel):
-    provider = SQLiteConnectionProvider("studium.db")
-    with provider.connect() as conn:
-        conn.execute("CREATE TABLE IF NOT EXISTS student (id INTEGER PRIMARY KEY, name TEXT)")
-        conn.commit()
-"""
-
 from __future__ import annotations
 
 import sqlite3
 from typing import Any, Mapping, Optional
 
-from .connection_provider import ConnectionProvider, DBConnection
+from db import *
 
 
 class SQLiteConnectionProvider(ConnectionProvider):
     """
-    Stellt SQLite-Verbindungen bereit.
-    Die Repositories erhalten diesen Provider injiziert, kennen aber nur das Interface.
+    🗝️ LAGERSCHLÜSSEL (SQLite)
+    - öffnet und schließt den Zugang zum Lager (SQLite-Datei) mittels sqlite3-Schlüssel  
+    - stellt sicher, dass Verbindungen korrekt erzeugt werden
+
+    Technisch:
+    - konkrete Implementierung des ConnectionProvider
+    - kapselt sqlite3.connect(...)
+    - kümmert sich um:
+        - Connection-Lebenszyklus
+        - Row-Factory (dict-ähnlicher Zugriff)
+        - Pfad zur DB-Datei
     """
 
     def __init__(self, db_path: str, *, pragmas: Optional[Mapping[str, Any]] = None) -> None:
-        """
-        Args:
-            db_path: Pfad zur SQLite-Datei (z. B. 'studium.db')
-            pragmas: optionale PRAGMA-Einstellungen, z. B. {"foreign_keys": 1}
-                     Standard: foreign_keys=ON
-        """
         self.db_path = db_path
         self._pragmas: dict[str, Any] = {"foreign_keys": 1}
         if pragmas:

@@ -1,26 +1,11 @@
-"""
-Datei: einschreibung.py
-Beschreibung:
-Definiert die Domänenobjekte für die Einschreibung eines Studenten in einen Studiengang.
-Enthält:
-- StatusEinschreibung (Enum)
-- Einschreibung (mit Start-/Zieldaten, Ziel-Notenschnitt und Status)
-- Fachliche Methoden zum Abschließen/Abbrechen und zur Dauerberechnung
-"""
 
-# ganz oben:
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
 from enum import Enum
-from typing import Optional, TYPE_CHECKING
-
-if TYPE_CHECKING:
-    # NUR für Typprüfung, nicht zur Laufzeit importieren
-    from .student import Student
-    from .studiengang import Studiengang
-
+from typing import Optional
 
 class StatusEinschreibung(Enum):
     AKTIV = "aktiv"
@@ -28,9 +13,21 @@ class StatusEinschreibung(Enum):
     ABGESCHLOSSEN = "abgeschlossen"
     ABGEBROCHEN = "abgebrochen"
 
-
 @dataclass
 class Einschreibung:
+    """
+    🥦 ZUTAT / LEBENSMITTEL (DOMÄNENMODELL)
+    - repräsentiert die Einschreibung eines Studenten in einen Studiengang 
+    - kennt nur seine eigenen Eigenschaften, keine Auswertungen, keine Darstellung
+
+    Technisch:
+    - reine Datenträger mit minimaler, fachlich sinnvoller Logik
+    - keine Datenbankzugriffe
+    - keine UI-Logik
+    - keine Aggregationen oder Berechnungen über mehrere Objekte
+    - wird von Repositories geladen/gespeichert
+    - wird von Services verarbeitet 
+    """
     student_id: int
     start_datum: date
     ziel_enddatum: date
@@ -48,9 +45,9 @@ class Einschreibung:
         self.abschluss_note = notenschnitt
         self.status = StatusEinschreibung.ABGESCHLOSSEN
 
-    def abbrechen(self, grund: Optional[str] = None, enddatum: date = None) -> None:
+    def abbrechen(self, enddatum: date, grund: Optional[str] = None) -> None:
+        self.end_datum = enddatum    
         self.abbruch_grund = grund
-        self.end_datum = enddatum
         self.status = StatusEinschreibung.ABGEBROCHEN
 
     def dauer_bis_ziel(self) -> timedelta:
@@ -60,10 +57,8 @@ class Einschreibung:
         if self.end_datum is None:
             return None
         return self.end_datum - self.start_datum
-    
 
 
-#################################################
     @property
     def ist_aktiv(self) -> bool:
         """Liefert True, wenn die Einschreibung aktiv ist"""

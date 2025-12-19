@@ -6,10 +6,19 @@ from .kachel import kachel
 
 def render_studienziele_status(view_model: StudienzieleStatusViewModel):
     """
-    Rendert den Status der Studienziele basierend auf einem ViewModel.
-    
-    Args:
-        view_model: StudienzieleStatusViewModel mit vorbereiteten Daten
+    🥗💁‍♂️ DEKORATEUR 
+    - nimmt den fertigen Teller entgegen (ViewModel)
+    - serviert ihn optisch ansprechend (Layout + Visualisierung)
+    - visualisiert den aktuellen Status bzgl. der Studienziele
+
+    Technisch:
+    - arbeitet ausschließlich mit ViewModels (keine DTOs, keine Models)
+    - enthält keine Service-Aufrufe (kein WorkflowService/ProgressService)
+    - enthält keine Geschäftslogik (keine ECTS-/Noten-Berechnungen)
+    - stellt dar:
+        - Streamlit-Widgets
+        - Plotly-Figure bauen
+        - Styling, Achsen, Hover, Leerezustände anzeigen
     """
     with kachel("AKTUELLER STATUS DER ZIELE"):
         
