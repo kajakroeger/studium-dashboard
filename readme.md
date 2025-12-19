@@ -1,23 +1,41 @@
-# Studium Dashboard (Konzeptionsphase)
+# 🎓 Studium Dashboard – Dein persönlicher Studien-Tracker
 
-Das Studium Dashboard unterstützt dabei, das Studium zu einem von Studierenden selbst gewählten Zeitpunkt und gewünschtem Notendurchschnitt erfolgreich abzuschließen.
+Ein interaktives Dashboard zur Planung, Nachverfolgung und Auswertung des eigenen Studiums – entwickelt mit Python, Streamlit und einer klar getrennten Architektur aus Domänenlogik, Services und UI.
 
 ## Hintergrund
-Das Dasboard richtet sich an Studierende, die ein Fernstudium absolvieren und ihre Lernzeiten und Prüfungen flexibel selbstgestalten können. Ohne eine strukturierte Übersicht über den aktuellen Stand, fällt es jedoch schwer den Fortschritt bezüglich des erfolgreichen Abschlusses einzuschätzen. 
+Das **Studium Dasboard** richtet sich insbesondere an Studierende, die ein Fernstudium absolvieren und ihre Lernzeiten und Prüfungen selbst organisieren. Ohne eine strukturierte Übersicht über den aktuellen Stand, kann es jedoch schwer fallen den Fortschritt bezüglich des erfolgreichen Abschlusses einzuschätzen. 
 
-Das Studium Dasboard gibt daher eine Übersicht über den aktuellen Stand des Studienfortschritts und liefert eine Prognose über den Abschluss des Studiums.
+🧑‍🎓 Für wen ist dieses Projekt gedacht?
+Dieses Projekt richtet sich an Studierende, die:
+- ihren Studienfortschritt (ECTS, Kurse, Prüfungen, Noten) strukturiert verfolgen möchten
+- Ziele wie Abschlussdatum oder Ziel-Notenschnitt im Blick behalten wollen
 <br></br>
 
-## verwendete Technologien
+## ✨ Features
+| Feature                                 | Beschreibung                                |
+|-----------------------------------------|---------------------------------------------|
+| 🎯 Studienziele                         | die vom Studierenden gesetztes Zieldatum und Ziel-Notenschnitt       |
+| 📊 Status-Übersicht der Studienziele    | aktueller Stand und Prognose zum Erreichen der Ziele                 |
+| 📊 Status-Übersicht                     | erreichte ECTS, aktueller Notenschnitt, Anzahl offener ECTS und durchschnittliche Bearbeitungszeit |
+| 📈 Burndown-Chart                       | Studienfortschritt über Zeit  |
+| 📈 Notenverlauf                         | Verlauf der erreichten Noten mit Verlauf des Notendurchschnitts      |
+| 📊 Bearbeitungsverlauf                  | tatsächliche Bearbeitungszeit pro abgeschlossenen Kurs und Verlauf der durchschnittlichen Bearbeitungszeit |
+| 🗓️ Kursplan (Gantt-ähnlich)             | Einplanung und tatsächliche Start- und Abschlussdatum der Kurse |
+| 🧑‍🎓 Mehrere Studiengänge                 | pro Student sind mehrere Studiengänge möglich|
+
+
+<br></br>
+
+## Verwendete Technologien
 
 | Technologie           | Beschreibung                                |
 |-----------------------|---------------------------------------------|
 | SQLite                | relationale, dateibasierte Datenbank        |
 | venv                  | Virtuelle Umgebung zur Verwaltung projekt-spezifischer Pakete und Abhängigkeiten, unabhängig von der globalen Python-Installation  |
-| pandas                | zur Datenaufbereitung und -analyse          |
-| plotly                | interaktive Diagramme und Visualisierungen  |
 | streamlit             | User Interface                              |
-| Jupyter Notebook      | Machbarkeitsprüfung und Dokumentation       |
+| pandas                | Projektvorbereitung: zur Datenaufbereitung und -analyse          |
+| plotly                | Projektvorbereitung: interaktive Diagramme und Visualisierungen  |
+| Jupyter Notebook      | Projektvorbereitung: Machbarkeitsprüfung und Dokumentation       |
 
 <br></br>
 
@@ -25,11 +43,17 @@ Das Studium Dasboard gibt daher eine Übersicht über den aktuellen Stand des St
 - Python 3.13.5 oder höher
 <br></br>
 
+## 📁 Projektstrutur
+<img width="664" height="551" alt="image" src="https://github.com/user-attachments/assets/9b54b6f5-58a6-4a0a-a7e4-331f87a9c218" />
+
+<br></br>
+
+## Code-Dokumentation mit Restaurant-Analogie
 
 ## ⚙️ Installation & Nutzung
 1. Repository klonen
  ```bash
- git clone https://github.com/DEIN-USERNAME/studium-dashboard.git
+ git clone https://github.com/kajakroeger/studium-dashboard.git
  cd studium-dashboard
  ```
 
@@ -39,7 +63,7 @@ Das Studium Dasboard gibt daher eine Übersicht über den aktuellen Stand des St
 ```bash
 # Windows
 python -m venv venv 
-venv\Scripts\activate        
+venv\Scripts\Activate.ps1        
 
 ```
 ```bash
@@ -51,16 +75,12 @@ source venv/bin/activate
 
 3. Abhängigkeiten installieren
 ```bash
-pip install -r requeriements.txt
+pip install -r requirements.txt
 ```   
 
-4. Test-Datenbank einrichten
-```bash
-python steup_test_db.py
-python testdaten_erstellen.py
-```
-
-5. Dashboard starten
+4. Dashboard starten
 ```bash
 streamlit run app.py
 ```
+Nach dem Start öffnet sich das Dashboard automatisch im Browser.
+Beim ersten Start wirst du durch ein Onboarding geführt (Student, Studiengang, Ziele).
