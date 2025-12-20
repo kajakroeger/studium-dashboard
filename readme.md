@@ -44,7 +44,9 @@ Dieses Projekt richtet sich an Studierende, die:
 <br></br>
 
 ## 📁 Projektstrutur
-<img width="664" height="551" alt="image" src="https://github.com/user-attachments/assets/9b54b6f5-58a6-4a0a-a7e4-331f87a9c218" />
+<img width="771" height="566" alt="image" src="https://github.com/user-attachments/assets/e7d26ae0-873e-447d-b8c7-f61473359dd4" />
+
+
 
 <br></br>
 
