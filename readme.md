@@ -4,7 +4,7 @@ Ein interaktives Dashboard zur Planung, Nachverfolgung und Auswertung des eigene
 
 ## Hintergrund
 Das **Studium Dasboard** richtet sich insbesondere an Studierende, die ein Fernstudium absolvieren und ihre Lernzeiten und Prüfungen selbst organisieren. Ohne eine strukturierte Übersicht über den aktuellen Stand, kann es jedoch schwer fallen den Fortschritt bezüglich des erfolgreichen Abschlusses einzuschätzen. 
-<<<<<<< HEAD
+
 
 🧑‍🎓 Für wen ist dieses Projekt gedacht?
 Dieses Projekt richtet sich an Studierende, die:
@@ -25,12 +25,11 @@ Dieses Projekt richtet sich an Studierende, die:
 | 🧑‍🎓 Mehrere Studiengänge                 | pro Student sind mehrere Studiengänge möglich|
 
 
-=======
 
 Dieses Projekt richtet sich an Studierende, die:
 - ihren Studienfortschritt (ECTS, Kurse, Prüfungen, Noten) strukturiert verfolgen möchten
 - Ziele wie Abschlussdatum oder Ziel-Notenschnitt im Blick behalten wollen
->>>>>>> c35b5dd5c2bd06ab3bfa4fe867468ca01994f5e8
+
 <br></br>
 
 ## ✨ Features
