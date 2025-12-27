@@ -5,7 +5,6 @@ Ein interaktives Dashboard zur Planung, Nachverfolgung und Auswertung des eigene
 ## Hintergrund
 Das **Studium Dasboard** richtet sich insbesondere an Studierende, die ein Fernstudium absolvieren und ihre Lernzeiten und Prüfungen selbst organisieren. Ohne eine strukturierte Übersicht über den aktuellen Stand, kann es jedoch schwer fallen den Fortschritt bezüglich des erfolgreichen Abschlusses einzuschätzen. 
 
-🧑‍🎓 Für wen ist dieses Projekt gedacht?
 Dieses Projekt richtet sich an Studierende, die:
 - ihren Studienfortschritt (ECTS, Kurse, Prüfungen, Noten) strukturiert verfolgen möchten
 - Ziele wie Abschlussdatum oder Ziel-Notenschnitt im Blick behalten wollen
@@ -26,7 +25,7 @@ Dieses Projekt richtet sich an Studierende, die:
 
 <br></br>
 
-## Verwendete Technologien
+## 🤖 Verwendete Technologien
 
 | Technologie           | Beschreibung                                |
 |-----------------------|---------------------------------------------|
@@ -40,17 +39,22 @@ Dieses Projekt richtet sich an Studierende, die:
 <br></br>
 
 ## 🛠️ Voraussetzung
-- Python 3.13.5 oder höher
+- Python 3.13.5 oder höher  
+
 <br></br>
 
 ## 📁 Projektstrutur
-<img width="771" height="566" alt="image" src="https://github.com/user-attachments/assets/e7d26ae0-873e-447d-b8c7-f61473359dd4" />
-
+<img width="925" height="716" alt="image" src="https://github.com/user-attachments/assets/57c50f11-8e85-4f9d-9408-850e02d97b05" />
 
 
 <br></br>
 
-## Code-Dokumentation mit Restaurant-Analogie
+## 🧑‍🍳 Code-Dokumentation mit Restaurant-Analogie
+Das Dashboard ist im Rahmen eines Studium-Projekts entstanden. Zur besseren Verständlichkeit wurde eine Restaurant-/Küchenanalogie eingeführt. Diese Analogie dient ausschließlich der didaktischen Unterstützung und verdeutlicht die Rollen und Verantwortlichkeiten der einzelnen Komponenten, ohne die technische Architektur zu beeinflussen. Eine Beschreibung der Analogie findet sich unter jupyter_notebook_notes/restaurant_analogie.ipynb. 
+
+
+<br></br>
+
 
 ## ⚙️ Installation & Nutzung
 1. Repository klonen
