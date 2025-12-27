@@ -39,6 +39,7 @@ def _step2(workflow: WorkflowService, progress: ProgressService) -> None:
     st.subheader("Schritt 2/2 – Dein Studiengang")
     with st.form("onb_step2"):
         sg_name = st.text_input("Studiengang-Name *", placeholder="z. B. B.Sc. Softwareentwicklung")
+        sem_anzahl = st.number_input("Anzahl der Semester *", min_value=1, max_value=120, step=1, value=6)
         col1, col2 = st.columns(2)
         monate = col1.number_input("Anzahl Monate *", min_value=1, max_value=120, step=1, value=36)
         kurse = col2.number_input("Anzahl Kurse *", min_value=1, max_value=60, step=1, value=30)
@@ -60,6 +61,7 @@ def _step2(workflow: WorkflowService, progress: ProgressService) -> None:
                     anzahl_monate=int(monate),
                     anzahl_kurse=int(kurse),
                     ects_gesamt=int(ects),
+                    semester_anzahl=int(sem_anzahl),
                     ziel_notenschnitt=float(f["ziel_noten"]),
                     ziel_enddatum=f["ziel_end"],
                 )

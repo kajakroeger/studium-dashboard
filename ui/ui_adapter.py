@@ -32,7 +32,7 @@ def get_dashboard_renderer(ui_backend: str) -> UIAdapter:
     """
 
     if ui_backend == "streamlit":
-        from ui.pages.dashboard_page_streamlit import render_dashboard_streamlit
+        from ui.streamlit.pages.dashboard_page_streamlit import render_dashboard_streamlit
         return render_dashboard_streamlit
 
     raise ValueError(f"Unbekannter UI-Backend: {ui_backend!r}")

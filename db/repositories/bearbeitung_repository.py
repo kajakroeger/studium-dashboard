@@ -1,7 +1,6 @@
-# db/repositories/bearbeitung_repository.py
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import Iterable, Optional
 from models.bearbeitung import Bearbeitung
 
 
@@ -23,6 +22,11 @@ class BearbeitungRepository(ABC):
         """Liefert eine Bearbeitung oder None, falls nicht vorhanden."""
         raise NotImplementedError
     
+    @abstractmethod
+    def list_by_student(self, student_id: int) -> Iterable[Bearbeitung]:
+        """Liefert Liste von Bearbeitungen eines Studenten"""
+        raise NotImplementedError
+
     @abstractmethod
     def create(self, b: Bearbeitung) -> int: 
         """Erstellt einen Datensatz und gibt die neue ID zurück."""

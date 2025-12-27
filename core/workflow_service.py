@@ -57,6 +57,7 @@ class WorkflowService:
         anzahl_monate: int,
         anzahl_kurse: int,
         ects_gesamt: int,
+        semester_anzahl: int,
         ziel_notenschnitt: float,
         ziel_enddatum: date,
         start_datum: date | None = None,
@@ -79,7 +80,8 @@ class WorkflowService:
             name=studiengang_name.strip(),
             anzahl_monate=int(anzahl_monate),
             anzahl_kurse=int(anzahl_kurse),
-            ects_gesamt=int(ects_gesamt),  # bei dir heißt es im Model ggf. anders (ects_gesamt/ ziel_ects)
+            ects_gesamt=int(ects_gesamt),  
+            semester_anzahl=semester_anzahl,
         )
         studiengang_id = self._studiengaenge.create(sg)
 
@@ -252,7 +254,7 @@ class WorkflowService:
             kurse[kurs.id] = kurs
 
         # 3) Als Liste zurückgeben (optional sortiert)
-        return sorted(kurse.values(), key=lambda k: (k.semester_nr or 0, k.name))
+        return sorted(kurse.values(), key=lambda k: (k.semester or 0, k.name))
 
 
     
@@ -472,7 +474,7 @@ class WorkflowService:
         kurs_kuerzel: str,
         ects: int,
         tutor: Optional[str] = None,
-        semester_nr: Optional[int] = None,
+        semester: Optional[int] = None,
         pruefungsform: Optional[Pruefungsform] = None,
         plan_start: Optional[date] = None,
         plan_end: Optional[date] = None,
@@ -490,7 +492,7 @@ class WorkflowService:
             kurs_kuerzel=kurs_kuerzel,
             ects=int(ects),
             tutor=tutor,
-            semester_nr=semester_nr,
+            semester=semester,
             studiengang_id=studiengang_id,
         )
         kurs_id = self._kurse.create(kurs)

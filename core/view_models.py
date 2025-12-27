@@ -1,7 +1,6 @@
-# core/view_models.py
 """
 🍽️ TELLER
-- enthält die fertige Gerichte
+- enthält die fertigen Gerichte
 
 Technisch:
 - Datenklassen, unabhängig von UI-Technologie
@@ -162,7 +161,7 @@ class BearbeitungsverlaufViewModel:
 @dataclass
 class KursplanEintrag:
     """Ein einzelner Eintrag im Gantt-Chart."""
-    semester: Optional[int]
+    semester: int
     kurs_label: str  
     plan_start: Optional[date]
     plan_end: Optional[date]

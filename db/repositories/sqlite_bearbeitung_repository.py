@@ -1,4 +1,3 @@
-# db/repositories/sqlite_bearbeitung_repository.py
 from __future__ import annotations
 from typing import Iterable, Optional
 from datetime import date
@@ -18,7 +17,7 @@ def _to_str(d: Optional[date]) -> Optional[str]:
 class SQLiteBearbeitungRepository(BearbeitungRepository):
     """
     📦💁‍♂️ REGALMANAGER (Bearbeitung) 
-    - führt Aktionen mit der Zutat 'Bearbeitung' aus z.B. finden, hinzufügen und entfernen,  
+    - führt Aktionen mit der Zutat 'Bearbeitung' aus z.B. finden, hinzufügen und entfernen 
 
     Technisch:
     - Konkreter SQLite-Adapter für KursRepository.

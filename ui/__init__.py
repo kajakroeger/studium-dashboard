@@ -6,7 +6,7 @@
   ohne ihre interne Struktur zu kennen
 """
 
-from .components.ui_adapter import UIAdapter, get_dashboard_renderer
+from .ui_adapter import UIAdapter, get_dashboard_renderer
 
 __all__ = [
     "UIAdapter",

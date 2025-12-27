@@ -13,7 +13,7 @@ def _to_str(d: Optional[date]) -> Optional[str]:
 class SQLiteEinschreibungRepository:
     """
     📦💁‍♂️ REGALMANAGER (Einschreibung) 
-    - führt Aktionen mit der Zutat 'Einschreibung' aus z.B. finden, hinzufügen und entfernen,  
+    - führt Aktionen mit der Zutat 'Einschreibung' aus z.B. finden, hinzufügen und entfernen  
 
     Technisch:
     - Konkreter SQLite-Adapter für KursRepository.

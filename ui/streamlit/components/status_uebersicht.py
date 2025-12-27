@@ -2,7 +2,6 @@
 # neue Welt ready
 import streamlit as st
 import plotly.graph_objects as go
-from typing import Optional
 
 from core.view_models import StatusUebersichtViewModel
 from .kachel import kachel

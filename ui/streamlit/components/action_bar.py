@@ -19,7 +19,9 @@ def add_kurs_dialog(workflow, progress, student_id: Optional[int], studiengang_i
     
     name = st.text_input("**Name***", key="dialog_add_name")
     kurs_kuerzel = st.text_input("**Kurskürzel***", key="dialog_add_kuerzel")
-    ects = st.number_input("**ECTS***", min_value=1, max_value=30, step=1, value=5, key="dialog_add_ects")
+    col1, col2 = st.columns(2)
+    sem = col1.number_input("**Semester***", min_value=1, max_value=50, step=1, value=1, key="dialog_add_semester")
+    ects = col2.number_input("**ECTS***", min_value=1, max_value=30, step=1, value=5, key="dialog_add_ects")
     tutor = st.text_input("Tutor (optional)", key="dialog_add_tutor")
 
     # Live-Validierung für Name und Kürzel
@@ -71,6 +73,7 @@ def add_kurs_dialog(workflow, progress, student_id: Optional[int], studiengang_i
                 studiengang_id=studiengang_id,
                 name=name.strip(),
                 kurs_kuerzel=kurs_kuerzel.strip(),
+                semester=int(sem),
                 ects=int(ects),
                 tutor=(tutor.strip() or None),
                 pruefungsform=pruefungsform,

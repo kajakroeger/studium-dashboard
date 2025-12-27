@@ -1,4 +1,3 @@
-# ui/pages/dashboard_page_streamlit.py
 from typing import Optional
 import streamlit as st
 
@@ -6,18 +5,8 @@ from core import get_progress_service, get_workflow_service
 
 from core.viewmodel_builder import ViewModelBuilder
 from core.workflow_service import WorkflowService
-from ui.components.action_bar import render_action_bar
 
-# Kachel-Komponenten
-from ui.components.kursplan import render_kursplan_gantt
-from ui.components.studienziele import render_studienziele
-from ui.components.studienziele_status import render_studienziele_status
-from ui.components.status_uebersicht import render_status_uebersicht
-from ui.components.burndown_chart import render_burndown_chart
-from ui.components.notenverlauf import render_notenverlauf
-from ui.components.bearbeitungsverlauf import render_bearbeitungsverlauf
-
-from ui.components.debug_info import render_debug_info
+from ui.streamlit.components import *
 
 def render_dashboard_streamlit(vm_builder: ViewModelBuilder) -> None:
     """
@@ -56,6 +45,8 @@ def render_dashboard_streamlit(vm_builder: ViewModelBuilder) -> None:
     )
 
     # 1) Studierende über den Service holen
+    # TODO: Wenn das Dashboard Multi-User unterstützen soll, 
+    # muss die Wahl des Studenten entsprechend angepasst werden
     try:
         students = workflow.student_all()
     except Exception as e:
@@ -63,27 +54,23 @@ def render_dashboard_streamlit(vm_builder: ViewModelBuilder) -> None:
         return
 
     if not students:
-        from ui.dialogs.onboarding import show_onboarding_dialog
+        from ui.streamlit.dialogs.onboarding import show_onboarding_dialog
         show_onboarding_dialog(workflow, progress)
         st.info("Bitte lege zuerst einen Studenten an.")
         return
 
-    # Hinweis: auch wenn mehrere in der DB sind, nutzen wir in dieser Version nur den ersten
+    # Über die DB können mehrere Studenten angelegt werden, derzeit wird nur der erste angezeigt
     if len(students) > 1:
         st.warning(
             "Hinweis: In dieser Version des Dashboards wird nur der erste angelegte "
             "Student betrachtet."
         )
-
-    # 2) In dieser Phase: immer den ersten Studenten verwenden
     student = students[0]
     student_id = student.id
     student_name = getattr(student, "name", "–")
 
-    # 3) Studiengang auswählen/ermitteln (WICHTIG: bevor wir ihn irgendwo benutzen)
+    # 3) Studiengang auswählen/ermitteln 
     studiengang_id = _select_studiengang(workflow, student_id)
-
-    # Titel + Kontext anzeigen (jetzt haben wir die Daten)
     sg = workflow.studiengang_by_id(studiengang_id) if studiengang_id else None
     sg_name = sg.name if sg else None
 
@@ -94,24 +81,27 @@ def render_dashboard_streamlit(vm_builder: ViewModelBuilder) -> None:
 
     st.caption(f"Aktueller Student: {student_name}")
 
-    # Wichtig: Dashboard trotzdem anzeigen, auch wenn (noch) kein Studiengang vorhanden ist
+    # Dashboard trotzdem anzeigen, auch wenn (noch) kein Studiengang vorhanden ist
     if not studiengang_id:
         st.info("Sobald ein Studiengang angelegt ist, werden hier alle Kacheln aktiviert.")
         return
 
-    # 4) Action-Bar (Buttons)
+    # 4) Action-Bar 
     render_action_bar(workflow, student_id, studiengang_id)
 
-    # 5) Debug
+    # 5) Debug: 
+    # TODO: Wenn nicht mehr erforderlich auskommentieren 
     render_debug_info(workflow, student_id, studiengang_id)
 
+
+# =================== Dashboard-Kacheln ===================
+   
     # 1. Zeile: Studienziele und Status
     left, right = st.columns(2, gap="large")
     with left:
         studienziele_vm = vm_builder.build_studienziele(student_id, studiengang_id)
         render_studienziele(studienziele_vm)
     with right:
-        # Hinweis: wenn du studiengang-spezifische Ziele willst, solltest du studiengang_id auch hier durchreichen
         studienziele_status_vm = vm_builder.build_studienziele_status(
             student_id,
             studiengang_id,
@@ -144,14 +134,26 @@ def render_dashboard_streamlit(vm_builder: ViewModelBuilder) -> None:
 
 
 def _select_studiengang(workflow: WorkflowService, student_id: int) -> Optional[int]:
+    """
+    Auswahl des Studiengangs
+    - 0 Studiengänge  -> None
+    - 1 Studiengang  -> automatisch auswählen (kein Dropdown)
+    - >=2            -> Dropdown anzeigen
+    """
     opts = workflow.studiengang_options_fuer_student(student_id)
     if not opts:
         return None
 
+    # ✅ FALL 1: genau ein Studiengang → automatisch wählen
+    if len(opts) == 1:
+        chosen_id = opts[0].id
+        st.session_state["studiengang_id"] = chosen_id
+        return chosen_id
+
+    # ✅ FALL 2: mehrere Studiengänge → Dropdown anzeigen
     ids = [o.id for o in opts]
     saved = st.session_state.get("studiengang_id")
 
-    # default index bestimmen
     if saved in ids:
         default_index = ids.index(saved)
     else:
@@ -168,5 +170,6 @@ def _select_studiengang(workflow: WorkflowService, student_id: int) -> Optional[
     chosen_id = chosen_opt.id
     st.session_state["studiengang_id"] = chosen_id
     return chosen_id
+
 
 

@@ -1,4 +1,3 @@
-# core/progress_service.py
 from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, timedelta
@@ -91,9 +90,6 @@ class ProgressService:
     # =====================================================================
     # 2) Studienziele-Status-Daten
     # =====================================================================
-
-    from datetime import date, timedelta
-    from typing import Optional
 
     def studienziele_status_daten(
         self,
@@ -229,7 +225,7 @@ class ProgressService:
     # =====================================================================
 
     def status_uebersicht_daten(self, student_id: int, studiengang_id) -> StatusUebersichtDaten:
-        """Liefert ALLE Daten für Status-Übersicht (ECTS + Noten + Tempo)."""
+        """Liefert die Daten für die Status-Übersicht (ECTS + Noten + Tempo) und gibt es als DTO StatusUebersichtDaten zurück."""
         ctx = self._context(student_id, studiengang_id)
 
         # ---------------------------------------------------------------------
@@ -289,6 +285,7 @@ class ProgressService:
     # =====================================================================
 
     def burndown_daten(self, student_id: int, studiengang_id: int) -> BurndownDaten:
+        """Liefert die Daten für das Burndwon Chart und gibt es als DTO BurndownDaten zurück."""
         ctx = self._context(student_id, studiengang_id)
 
         kurse_mit_datum = [
@@ -317,6 +314,7 @@ class ProgressService:
     # 5) Notenverlauf-Daten
     # =====================================================================
     def notenverlauf_daten(self, student_id: int, studiengang_id: int) -> NotenverlaufDaten:
+        """Liefert die Daten für den Notenverlauf und gibt es als DTO NotenverlaufDaten zurück."""
         ctx = self._context(student_id, studiengang_id)
 
         kursnamen: list[str] = []
@@ -358,6 +356,7 @@ class ProgressService:
     # =====================================================================
 
     def bearbeitungsverlauf_daten(self, student_id: int, studiengang_id: int) -> BearbeitungsverlaufDaten:
+        """Liefert die Daten für den Bearbeitungsverlauf und gibt es als DTO BearbeitungsverlaufDaten zurück."""
         ctx = self._context(student_id, studiengang_id)
 
         tempo_daten = self._abgeschlossen_tempo_daten(ctx)
@@ -398,7 +397,7 @@ class ProgressService:
     # =====================================================================
 
     def kursplan_daten(self, student_id: int, studiengang_id: Optional[int] = None) -> KursplanDaten:
-        """Liefert Kursplan-Daten (Gantt)."""
+        """Liefert Kursplan-Daten und gibt es als DTO KursplanDaten zurück."""
         ctx = self._context(student_id, studiengang_id)
 
         eintraege = []
@@ -416,7 +415,7 @@ class ProgressService:
 
             # B) Daten für einen Eintrags im Kursplan-Gantt-Diagramm in KursplanRohEintrag-DTO 
             e = KursplanRohEintrag(
-                semester=kurs.semester_nr,
+                semester=kurs.semester,
                 kurs_name=kurs.name,
                 kurs_kuerzel=kurs.kurs_kuerzel,
                 plan_start=b.plan_start,
@@ -519,8 +518,6 @@ class ProgressService:
             bearbeitungen=bearbeitungen,
             abgeschlossene=abgeschlossene,
         )
-
-
 
         self._ctx_cache[key] = ctx
         return ctx

@@ -10,7 +10,7 @@ from .kurs_repository import KursRepository
 class SQLiteKursRepository(KursRepository):
     """
     📦💁‍♂️ REGALMANAGER (Kurs) 
-    - führt Aktionen mit der Zutat 'Kurs' aus z.B. finden, hinzufügen und entfernen,  
+    - führt Aktionen mit der Zutat 'Kurs' aus z.B. finden, hinzufügen und entfernen  
 
     Technisch:
     - Konkreter SQLite-Adapter für KursRepository.
@@ -75,7 +75,7 @@ class SQLiteKursRepository(KursRepository):
         with self._provider.connect() as conn:
             cur = conn.execute(
                 "INSERT INTO kurs (name, kurs_kuerzel, ects, tutor, semester, studiengang_id) VALUES (?,?,?,?,?,?)",
-                (kurs.name, kurs.kurs_kuerzel, kurs.ects, kurs.tutor, kurs.semester_nr, kurs.studiengang_id),
+                (kurs.name, kurs.kurs_kuerzel, kurs.ects, kurs.tutor, kurs.semester, kurs.studiengang_id),
             )
             conn.commit()
             new_id = int(cur.lastrowid)  
@@ -87,7 +87,7 @@ class SQLiteKursRepository(KursRepository):
         with self._provider.connect() as conn:
             conn.execute(
                 "UPDATE kurs SET name=?, kurs_kuerzel=?, ects=?, tutor=?, semester=?, studiengang_id=? WHERE id=?",
-                (kurs.name, kurs.kurs_kuerzel, kurs.ects, kurs.tutor, kurs.semester_nr, kurs.studiengang_id, kurs.id),
+                (kurs.name, kurs.kurs_kuerzel, kurs.ects, kurs.tutor, kurs.semester, kurs.studiengang_id, kurs.id),
             )
             conn.commit()
 
@@ -135,6 +135,6 @@ class SQLiteKursRepository(KursRepository):
             kurs_kuerzel=row["kurs_kuerzel"],
             ects=row["ects"],
             tutor=row["tutor"],
-            semester_nr=int(row["semester"]) if row["semester"] is not None else None,
+            semester=int(row["semester"]) if row["semester"] is not None else None,
             studiengang_id=row["studiengang_id"],
         )

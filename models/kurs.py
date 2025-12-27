@@ -16,14 +16,15 @@ class Kurs:
     - wird von Repositories geladen/gespeichert
     - wird von Services verarbeitet 
     """
-    id: Optional[int] = None
     name: str = ""
     kurs_kuerzel: str = ""
     ects: int = 0
+    semester: int = 0
+    studiengang_id: int = 0   # nötig für Filter pro Studiengang
 
     tutor: Optional[str] = None
-    semester_nr: Optional[int] = None      # nur Zahl kein Semester-Objekt
-    studiengang_id: Optional[int] = None   # nötig für Filter pro Studiengang
+    id: Optional[int] = None
+
      
 
     def __str__(self) -> str:

@@ -34,8 +34,6 @@ class SQLiteConnectionProvider(ConnectionProvider):
         - setzt gewünschte PRAGMAs (z. B. Foreign Keys)
         """
         conn = sqlite3.connect(self.db_path)
-        # Optional: Typ-Erkennung aktivieren (falls DATE-Konverter genutzt wird)
-        # conn = sqlite3.connect(self.db_path, detect_types=sqlite3.PARSE_DECLTYPES)
 
         # Zeilen als sqlite3.Row zurückgeben (bequemer in Repos)
         conn.row_factory = sqlite3.Row  # type: ignore[attr-defined]

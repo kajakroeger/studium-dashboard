@@ -1,19 +1,7 @@
-# core/viewmodel_builder.py 
-# Factory/Mapper für ViewModels.
-
-# - Ruft vorbereitete DTOs aus ProgressService ab 
-# - Wandelt DTOs in UI-fertige ViewModels um:
-#   * Formatierung (Datumsstrings, Labels)
-#   * Flags (hat_daten, fehlermeldung)
-
-# - DB-Zugriffe liegen im WorkflowService/Repos
-# - fachliche Berechnungen liegen im ProgressService
-
 from __future__ import annotations
 from datetime import date
 from typing import List, Optional, Tuple
 
-from core.workflow_service import WorkflowService
 from core.progress_service import ProgressService
 
 from .view_models import (
@@ -49,16 +37,12 @@ class ViewModelBuilder:
       - Flags wie hat_daten / hat_ziel / hat_einschreibung
       - Texte für leere Zustände
       - Listen/Strukturen passend für Charts & Tabellen
-
     """
-
     def __init__(
         self,
         *,
-        workflow_service: WorkflowService,
         progress_service: ProgressService,
     ) -> None:
-        self.workflow = workflow_service
         self.progress = progress_service
 
     # =====================================================================

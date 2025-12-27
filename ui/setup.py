@@ -30,10 +30,7 @@ def build_service(db_path: str = "studium.db") -> ViewModelBuilder:
     progress = get_progress_service()
 
     # 3) ViewModelBuilder mit den Services aufbauen
-    vm_builder = ViewModelBuilder(
-        workflow_service=workflow,
-        progress_service=progress,
-    )
+    vm_builder = ViewModelBuilder(progress_service=progress)
 
     return vm_builder
 

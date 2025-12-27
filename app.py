@@ -15,7 +15,7 @@ Technisch:
 """
 
 from ui.setup import build_service
-from ui.components.ui_adapter import get_dashboard_renderer
+from ui.ui_adapter import get_dashboard_renderer
 # from ui.theme import apply_global_theme
 
 

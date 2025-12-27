@@ -83,7 +83,7 @@ def render_debug_info(service, student_id, studiengang_id: Optional[int]):
                             "kurs_kuerzel": k.kurs_kuerzel,
                             "ects": k.ects,
                             "tutor": k.tutor,
-                            "semester": k.semester_nr,
+                            "semester": k.semester,
                             "studiengang_id": k.studiengang_id,
                         }
                         for k in kurse

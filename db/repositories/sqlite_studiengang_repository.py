@@ -35,7 +35,8 @@ class SQLiteStudiengangRepository(StudiengangRepository):
                     name TEXT NOT NULL UNIQUE,
                     anzahl_monate INTEGER NOT NULL,
                     anzahl_kurse INTEGER NOT NULL,
-                    ects_gesamt INTEGER NOT NULL
+                    ects_gesamt INTEGER NOT NULL,
+                    semester_anzahl INTEGER NOT NULL
                 );
             """)
             conn.commit()
@@ -45,9 +46,9 @@ class SQLiteStudiengangRepository(StudiengangRepository):
     def create(self, s: Studiengang) -> int:
         with self._provider.connect() as conn:
             cur = conn.execute("""
-                INSERT INTO studiengang (name, anzahl_monate, anzahl_kurse, ects_gesamt)
-                VALUES (?, ?, ?, ?)
-            """, (s.name, s.anzahl_monate, s.anzahl_kurse, s.ects_gesamt))
+                INSERT INTO studiengang (name, anzahl_monate, anzahl_kurse, ects_gesamt, semester_anzahl)
+                VALUES (?, ?, ?, ?, ?)
+            """, (s.name, s.anzahl_monate, s.anzahl_kurse, s.ects_gesamt, s.semester_anzahl))
             conn.commit()
             new_id = int(cur.lastrowid) 
         s.id = new_id
@@ -64,6 +65,7 @@ class SQLiteStudiengangRepository(StudiengangRepository):
             anzahl_monate=int(row["anzahl_monate"]),
             anzahl_kurse=int(row["anzahl_kurse"]),
             ects_gesamt=int(row["ects_gesamt"]),
+            semester_anzahl=int(row["semester_anzahl"]),
         )
     
 
@@ -78,12 +80,13 @@ class SQLiteStudiengangRepository(StudiengangRepository):
             anzahl_monate=int(row["anzahl_monate"]),
             anzahl_kurse=int(row["anzahl_kurse"]),
             ects_gesamt=int(row["ects_gesamt"]),
+            semester_anzahl=int(row["semester_anzahl"]),
         )
     
     def list_all(self):
         with self._provider.connect() as conn:
             rows = conn.execute(
-                "SELECT id, name, anzahl_monate, anzahl_kurse, ects_gesamt FROM studiengang ORDER BY id"
+                "SELECT id, name, anzahl_monate, anzahl_kurse, ects_gesamt, semester_anzahl FROM studiengang ORDER BY id"
             ).fetchall()
         return [self._row_to_model(r) for r in rows]
         
@@ -96,4 +99,5 @@ class SQLiteStudiengangRepository(StudiengangRepository):
             anzahl_monate=int(row["anzahl_monate"]),
             anzahl_kurse=int(row["anzahl_kurse"]),
             ects_gesamt=int(row["ects_gesamt"]),
+            semester_anzahl=int(row["semester_anzahl"]),
         )

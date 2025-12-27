@@ -1,4 +1,3 @@
-# db/__init__.py
 """
 - enthält alle Module rund um den Datenbankzugriff
 - Beinhaltet:

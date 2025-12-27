@@ -19,7 +19,7 @@ from models import Student
 class SQLiteStudentRepository(StudentRepository):
     """
     📦💁‍♂️ REGALMANAGER (Student) 
-    - führt Aktionen mit der Zutat 'Student' aus z.B. finden, hinzufügen und entfernen,  
+    - führt Aktionen mit der Zutat 'Student' aus z.B. finden, hinzufügen und entfernen  
 
     Technisch:
     - Konkreter SQLite-Adapter für KursRepository.

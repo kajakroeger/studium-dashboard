@@ -16,7 +16,7 @@ from .pruefung_repository import PruefungRepository
 class SQLitePruefungRepository(PruefungRepository):
     """
     📦💁‍♂️ REGALMANAGER (Prüfung) 
-    - führt Aktionen mit der Zutat 'Prüfung' aus z.B. finden, hinzufügen und entfernen,  
+    - führt Aktionen mit der Zutat 'Prüfung' aus z.B. finden, hinzufügen und entfernen  
 
     Technisch:
     - Konkreter SQLite-Adapter für KursRepository.
