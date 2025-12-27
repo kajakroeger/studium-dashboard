@@ -6,30 +6,9 @@ Ein interaktives Dashboard zur Planung, Nachverfolgung und Auswertung des eigene
 Das **Studium Dasboard** richtet sich insbesondere an Studierende, die ein Fernstudium absolvieren und ihre Lernzeiten und Prüfungen selbst organisieren. Ohne eine strukturierte Übersicht über den aktuellen Stand, kann es jedoch schwer fallen den Fortschritt bezüglich des erfolgreichen Abschlusses einzuschätzen. 
 
 
-🧑‍🎓 Für wen ist dieses Projekt gedacht?
 Dieses Projekt richtet sich an Studierende, die:
 - ihren Studienfortschritt (ECTS, Kurse, Prüfungen, Noten) strukturiert verfolgen möchten
 - Ziele wie Abschlussdatum oder Ziel-Notenschnitt im Blick behalten wollen
-<br></br>
-
-## ✨ Features
-| Feature                                 | Beschreibung                                |
-|-----------------------------------------|---------------------------------------------|
-| 🎯 Studienziele                         | die vom Studierenden gesetztes Zieldatum und Ziel-Notenschnitt       |
-| 📊 Status-Übersicht der Studienziele    | aktueller Stand und Prognose zum Erreichen der Ziele                 |
-| 📊 Status-Übersicht                     | erreichte ECTS, aktueller Notenschnitt, Anzahl offener ECTS und durchschnittliche Bearbeitungszeit |
-| 📈 Burndown-Chart                       | Studienfortschritt über Zeit  |
-| 📈 Notenverlauf                         | Verlauf der erreichten Noten mit Verlauf des Notendurchschnitts      |
-| 📊 Bearbeitungsverlauf                  | tatsächliche Bearbeitungszeit pro abgeschlossenen Kurs und Verlauf der durchschnittlichen Bearbeitungszeit |
-| 🗓️ Kursplan (Gantt-ähnlich)             | Einplanung und tatsächliche Start- und Abschlussdatum der Kurse |
-| 🧑‍🎓 Mehrere Studiengänge                 | pro Student sind mehrere Studiengänge möglich|
-
-
-
-Dieses Projekt richtet sich an Studierende, die:
-- ihren Studienfortschritt (ECTS, Kurse, Prüfungen, Noten) strukturiert verfolgen möchten
-- Ziele wie Abschlussdatum oder Ziel-Notenschnitt im Blick behalten wollen
-
 <br></br>
 
 ## ✨ Features
