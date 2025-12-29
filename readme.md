@@ -51,7 +51,7 @@ Dieses Projekt richtet sich an Studierende, die:
 <br></br>
 
 ## 🧑‍🍳 Code-Dokumentation mit Restaurant-Analogie
-Das Dashboard ist im Rahmen eines Studium-Projekts entstanden. Zur besseren Verständlichkeit wurde eine Restaurant-/Küchenanalogie eingeführt. Diese Analogie dient ausschließlich der didaktischen Unterstützung und verdeutlicht die Rollen und Verantwortlichkeiten der einzelnen Komponenten, ohne die technische Architektur zu beeinflussen. Eine Beschreibung der Analogie findet sich unter jupyter_notebook_notes/restaurant_analogie.ipynb. 
+Das Dashboard ist im Rahmen eines Studium-Projekts entstanden. Zur besseren Verständlichkeit wurde eine Restaurant-/Küchenanalogie eingeführt. Diese Analogie dient ausschließlich der didaktischen Unterstützung und verdeutlicht die Rollen und Verantwortlichkeiten der einzelnen Komponenten, ohne die technische Architektur zu beeinflussen. Eine Beschreibung der Analogie findet sich unter jupyter_notebook_notes/restaurant_analogie.ipynb.
 
 
 <br></br>
